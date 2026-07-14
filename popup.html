@@ -75,6 +75,15 @@
           <input type="number" id="goalSolvedInput" min="0" step="1" /> solv
         </div>
       </div>
+      <div class="row data">
+        <label>Backup</label>
+        <div class="data-buttons">
+          <button id="exportBtn" class="ghost">Export</button>
+          <button id="importMergeBtn" class="ghost">Import·merge</button>
+          <button id="importReplaceBtn" class="ghost">Import·replace</button>
+        </div>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden />
     </section>
 
     <div class="actions">

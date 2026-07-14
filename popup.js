@@ -4,6 +4,9 @@ import {
   sortedDays,
   localDateKey,
   formatRate,
+  serializeState,
+  parseImport,
+  mergeStates,
   DEFAULT_GOALS,
 } from "./detect.js";
 
@@ -119,6 +122,83 @@ async function init() {
     await setState(state);
     render(state);
     chrome.runtime.sendMessage({ type: "refreshAction" });
+  });
+
+  // --- Export ---------------------------------------------------------------
+  document.getElementById("exportBtn").addEventListener("click", async () => {
+    const s = await getState();
+    const json = JSON.stringify(serializeState(s), null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `zendesk-productivity-${localDateKey()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  // --- Import (merge or replace) --------------------------------------------
+  const importFile = document.getElementById("importFile");
+  let importMode = "merge";
+  document.getElementById("importMergeBtn").addEventListener("click", () => {
+    importMode = "merge";
+    importFile.click();
+  });
+  document.getElementById("importReplaceBtn").addEventListener("click", () => {
+    importMode = "replace";
+    importFile.click();
+  });
+
+  importFile.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    let text;
+    try {
+      text = await file.text();
+    } catch {
+      alert("Could not read that file.");
+      return;
+    }
+    const res = parseImport(text);
+    if (!res.ok) {
+      alert("Import failed: " + res.error);
+      return;
+    }
+
+    state = await getState();
+    let next;
+    if (importMode === "replace") {
+      if (
+        !confirm(
+          `Replace ALL current data with ${res.dayCount} day(s) from the file? ` +
+            `This overwrites what you have now.`
+        )
+      ) {
+        return;
+      }
+      next = res.state;
+    } else {
+      if (
+        !confirm(
+          `Merge ${res.dayCount} day(s) into your data? For overlapping days the ` +
+            `higher counts are kept and productive blocks are combined; your current ` +
+            `targets are unchanged.`
+        )
+      ) {
+        return;
+      }
+      next = mergeStates(state, res.state);
+    }
+
+    state = next;
+    await setState(state);
+    render(state);
+    chrome.runtime.sendMessage({ type: "refreshAction" });
+    alert("Import complete.");
   });
 }
 

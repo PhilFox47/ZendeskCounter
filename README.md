@@ -46,7 +46,29 @@ submits never inflate anything.
     goal bars (green when the target is met, amber when not).
   - **By day**: a table of every recorded day with productive hours, counts, and
     per-hour rates, each rate colored by whether it hit target.
-  - **Settings**: editable targets and a reset-all button.
+  - **Settings**: editable targets, backup (export / import), and reset-all.
+
+## Backup: export & import
+
+Your data lives only in this browser, so the popup's **Backup** row lets you move
+it across versions or devices:
+
+- **Export** downloads a small `zendesk-productivity-YYYY-MM-DD.json` file
+  containing every recorded day and your targets. It's a plain, versioned,
+  self-describing JSON envelope (`{ app, schema, exportedAt, data }`) — no ticket
+  content, just the counts, 30-minute-block indices, and goals.
+- **Import · replace** overwrites all current data with the file's data
+  (including its targets). Use this to restore, or to seed a fresh install.
+- **Import · merge** combines the file into what you already have: non-overlapping
+  days are added, and for a day present in both it keeps the **higher** reply and
+  solved counts and **unions** the productive blocks. Your current targets are
+  left unchanged. (Merge is intended for combining a clean export into an empty or
+  partial install; because overlapping days take the max rather than the sum, it
+  won't double-count a day you re-import.)
+
+Imported files are validated and sanitized: non-JSON or non-tracking files are
+rejected, unknown/oddly-shaped entries are dropped, and counts/blocks/targets are
+clamped to sane values.
 
 Days are kept separately; each new local day starts fresh while history is
 retained.

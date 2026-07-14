@@ -255,9 +255,31 @@ select {
   font-size: 12px;
 }
 
+.data-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+button.ghost {
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 5px 9px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+button.ghost:hover {
+  border-color: var(--accent);
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: 10px;
 }
 
 button.danger {

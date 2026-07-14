@@ -242,3 +242,114 @@ export function todayRates(state, dateKey = localDateKey()) {
     repliesOnTarget: m.productiveHours > 0 && m.repliesPerHour >= g.repliesPerHour,
   };
 }
+
+// --- Export / import ----------------------------------------------------------
+
+export const APP_ID = "zendesk-productivity-tracker";
+export const SCHEMA_VERSION = 1;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function nonNegInt(v) {
+  return Math.max(0, Math.floor(Number(v) || 0));
+}
+
+/** Drop unrecognized day keys and clamp values — imported files are untrusted. */
+function sanitizeDays(days) {
+  const out = {};
+  if (!days || typeof days !== "object") return out;
+  for (const [key, val] of Object.entries(days)) {
+    if (!DATE_RE.test(key) || !val || typeof val !== "object") continue;
+    const blocks = Array.isArray(val.blocks)
+      ? val.blocks.filter((n) => Number.isInteger(n) && n >= 0 && n < BLOCKS_PER_DAY)
+      : [];
+    out[key] = {
+      replies: nonNegInt(val.replies),
+      solved: nonNegInt(val.solved),
+      blocks: [...new Set(blocks)].sort((a, b) => a - b),
+    };
+  }
+  return out;
+}
+
+// Invalid targets (negative or non-numeric) fall back to the default rather than
+// clamping to 0 — a 0 target would make every rate trivially "on target".
+function sanitizeGoal(v, def) {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : def;
+}
+
+function sanitizeGoals(goals) {
+  if (!goals || typeof goals !== "object") return { ...DEFAULT_GOALS };
+  return {
+    repliesPerHour: sanitizeGoal(goals.repliesPerHour, DEFAULT_GOALS.repliesPerHour),
+    solvedPerHour: sanitizeGoal(goals.solvedPerHour, DEFAULT_GOALS.solvedPerHour),
+  };
+}
+
+/**
+ * Build the portable export object (self-describing, versioned).
+ * @param {object} state
+ * @returns {object}
+ */
+export function serializeState(state, now = new Date()) {
+  const s = normalize(state);
+  return {
+    app: APP_ID,
+    schema: SCHEMA_VERSION,
+    exportedAt: now.toISOString(),
+    data: { days: s.days, goals: s.goals },
+  };
+}
+
+/**
+ * Parse and validate an imported file's text. Accepts either the wrapped export
+ * format ({ app, schema, data }) or a raw state object ({ days, goals }).
+ * @param {string} text
+ * @returns {{ok:true, state:object, dayCount:number} | {ok:false, error:string}}
+ */
+export function parseImport(text) {
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return { ok: false, error: "That file isn't valid JSON." };
+  }
+  if (!json || typeof json !== "object") {
+    return { ok: false, error: "Unrecognized file format." };
+  }
+  const payload =
+    json.data && typeof json.data === "object" ? json.data : json;
+  if (!payload.days || typeof payload.days !== "object" || Array.isArray(payload.days)) {
+    return { ok: false, error: "No tracking data found in that file." };
+  }
+  const state = normalize({
+    days: sanitizeDays(payload.days),
+    goals: sanitizeGoals(payload.goals),
+  });
+  return { ok: true, state, dayCount: Object.keys(state.days).length };
+}
+
+/**
+ * Merge `incoming` into `base`. For overlapping days the higher reply/solved
+ * counts are kept and productive blocks are unioned; the base device's goals are
+ * preserved. Non-overlapping days are simply added.
+ * @param {object} base
+ * @param {object} incoming
+ * @returns {object}
+ */
+export function mergeStates(base, incoming) {
+  const a = normalize(base);
+  const b = normalize(incoming);
+  const days = { ...a.days };
+  for (const [date, d] of Object.entries(b.days)) {
+    const cur = days[date];
+    days[date] = cur
+      ? {
+          replies: Math.max(cur.replies, d.replies),
+          solved: Math.max(cur.solved, d.solved),
+          blocks: [...new Set([...cur.blocks, ...d.blocks])].sort((x, y) => x - y),
+        }
+      : d;
+  }
+  return normalize({ days, goals: a.goals });
+}

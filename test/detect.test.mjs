@@ -15,6 +15,10 @@ import {
   formatRate,
   blockIndex,
   localDateKey,
+  serializeState,
+  parseImport,
+  mergeStates,
+  APP_ID,
 } from "../detect.js";
 
 // --- Fixtures: faithful UpdateTicketMutation bodies --------------------------
@@ -243,4 +247,96 @@ test("normalize dedupes and sorts blocks and defaults goals", () => {
 test("custom goals are preserved through normalize", () => {
   const s = normalize({ days: {}, goals: { repliesPerHour: 10, solvedPerHour: 4 } });
   assert.deepEqual(s.goals, { repliesPerHour: 10, solvedPerHour: 4 });
+});
+
+// --- Export / import ---------------------------------------------------------
+
+function seed(days, goals) {
+  return normalize({ days, goals });
+}
+
+test("serializeState produces a versioned, self-describing envelope", () => {
+  const s = seed({ "2026-07-14": { replies: 5, solved: 2, blocks: [10, 11] } });
+  const out = serializeState(s, new Date("2026-07-14T12:00:00Z"));
+  assert.equal(out.app, APP_ID);
+  assert.equal(out.schema, 1);
+  assert.equal(out.exportedAt, "2026-07-14T12:00:00.000Z");
+  assert.deepEqual(out.data.days["2026-07-14"], { replies: 5, solved: 2, blocks: [10, 11] });
+});
+
+test("export -> import round trip preserves data", () => {
+  const s = seed(
+    { "2026-07-14": { replies: 9, solved: 4, blocks: [20, 21, 22] } },
+    { repliesPerHour: 6, solvedPerHour: 2 }
+  );
+  const text = JSON.stringify(serializeState(s));
+  const res = parseImport(text);
+  assert.equal(res.ok, true);
+  assert.equal(res.dayCount, 1);
+  assert.deepEqual(res.state.days["2026-07-14"], { replies: 9, solved: 4, blocks: [20, 21, 22] });
+  assert.deepEqual(res.state.goals, { repliesPerHour: 6, solvedPerHour: 2 });
+});
+
+test("parseImport accepts a raw state object (no envelope)", () => {
+  const raw = JSON.stringify({ days: { "2026-07-14": { replies: 1, solved: 1, blocks: [0] } } });
+  const res = parseImport(raw);
+  assert.equal(res.ok, true);
+  assert.equal(res.dayCount, 1);
+});
+
+test("parseImport rejects non-JSON and non-tracking files", () => {
+  assert.equal(parseImport("nope").ok, false);
+  assert.equal(parseImport("[1,2,3]").ok, false);
+  assert.equal(parseImport(JSON.stringify({ hello: "world" })).ok, false);
+});
+
+test("parseImport sanitizes hostile/garbage day entries", () => {
+  const dirty = JSON.stringify({
+    data: {
+      days: {
+        "2026-07-14": { replies: -5, solved: 2.9, blocks: [10, 99, "x", 10] },
+        "not-a-date": { replies: 1000, solved: 1000, blocks: [1] },
+        "2026-07-15": "garbage",
+      },
+      goals: { repliesPerHour: -3, solvedPerHour: "abc" },
+    },
+  });
+  const res = parseImport(dirty);
+  assert.equal(res.ok, true);
+  assert.equal(res.dayCount, 1); // bad date key and non-object day dropped
+  assert.deepEqual(res.state.days["2026-07-14"], {
+    replies: 0, // clamped from -5
+    solved: 2, // floored from 2.9
+    blocks: [10], // 99 out of range, "x" non-int, duplicate removed
+  });
+  assert.equal(res.state.goals.repliesPerHour, 7); // invalid (-3) -> default
+  assert.equal(res.state.goals.solvedPerHour, 3); // invalid ("abc") -> default
+});
+
+test("mergeStates unions blocks and keeps higher counts for overlapping days", () => {
+  const base = seed(
+    { "2026-07-14": { replies: 10, solved: 3, blocks: [10, 11] } },
+    { repliesPerHour: 7, solvedPerHour: 3 }
+  );
+  const incoming = seed(
+    {
+      "2026-07-14": { replies: 4, solved: 5, blocks: [11, 12] },
+      "2026-07-13": { replies: 8, solved: 2, blocks: [20] },
+    },
+    { repliesPerHour: 99, solvedPerHour: 99 }
+  );
+  const merged = mergeStates(base, incoming);
+  assert.deepEqual(merged.days["2026-07-14"], {
+    replies: 10, // max(10, 4)
+    solved: 5, // max(3, 5)
+    blocks: [10, 11, 12], // union
+  });
+  assert.deepEqual(merged.days["2026-07-13"], { replies: 8, solved: 2, blocks: [20] });
+  assert.deepEqual(merged.goals, { repliesPerHour: 7, solvedPerHour: 3 }); // base goals kept
+});
+
+test("merging into an empty base equals the incoming data", () => {
+  const incoming = seed({ "2026-07-14": { replies: 3, solved: 1, blocks: [5] } });
+  const merged = mergeStates(normalize(undefined), incoming);
+  assert.deepEqual(merged.days["2026-07-14"], { replies: 3, solved: 1, blocks: [5] });
 });
