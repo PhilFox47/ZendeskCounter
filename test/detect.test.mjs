@@ -18,6 +18,8 @@ import {
   serializeState,
   parseImport,
   mergeStates,
+  progressColor,
+  RATE_COLORS,
   APP_ID,
 } from "../detect.js";
 
@@ -339,4 +341,37 @@ test("merging into an empty base equals the incoming data", () => {
   const incoming = seed({ "2026-07-14": { replies: 3, solved: 1, blocks: [5] } });
   const merged = mergeStates(normalize(undefined), incoming);
   assert.deepEqual(merged.days["2026-07-14"], { replies: 3, solved: 1, blocks: [5] });
+});
+
+// --- Progress color ----------------------------------------------------------
+
+test("progressColor hits the anchor colors exactly", () => {
+  assert.equal(progressColor(0, 3), RATE_COLORS.red); // 0%
+  assert.equal(progressColor(1.5, 3), RATE_COLORS.amber); // 50%
+  assert.equal(progressColor(3, 3), RATE_COLORS.green); // 100%
+  assert.equal(progressColor(4, 3), RATE_COLORS.green); // 133% stays green
+  assert.equal(progressColor(4.5, 3), RATE_COLORS.purple); // 150%
+  assert.equal(progressColor(9, 3), RATE_COLORS.purple); // 300%
+});
+
+test("progressColor blends between anchors (not equal to either endpoint)", () => {
+  const q = progressColor(0.75, 3); // 25% -> between red and amber
+  assert.notEqual(q, RATE_COLORS.red);
+  assert.notEqual(q, RATE_COLORS.amber);
+  assert.match(q, /^#[0-9a-f]{6}$/);
+
+  const threeq = progressColor(2.25, 3); // 75% -> between amber and green
+  assert.notEqual(threeq, RATE_COLORS.amber);
+  assert.notEqual(threeq, RATE_COLORS.green);
+});
+
+test("progressColor is red just above zero and green/purple at goal edges", () => {
+  assert.equal(progressColor(3, 3), RATE_COLORS.green); // exactly 100%
+  assert.equal(progressColor(4.49, 3), RATE_COLORS.green); // just below 150%
+  assert.equal(progressColor(4.5, 3), RATE_COLORS.purple); // exactly 150%
+});
+
+test("progressColor handles a zero goal without dividing by zero", () => {
+  assert.equal(progressColor(0, 0), RATE_COLORS.green); // nothing required, nothing done
+  assert.equal(progressColor(5, 0), RATE_COLORS.purple); // any output beats a 0 target
 });

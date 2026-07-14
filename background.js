@@ -17,6 +17,7 @@ import {
   metricsForDate,
   todayRates,
   formatRate,
+  progressColor,
 } from "./detect.js";
 import { makeIcons } from "./icon.js";
 
@@ -58,7 +59,14 @@ function decodeRequestBody(requestBody) {
 async function updateAction(state) {
   const s = normalize(state);
   const rates = todayRates(s);
-  await chrome.action.setIcon({ imageData: makeIcons(rates) });
+  await chrome.action.setIcon({
+    imageData: makeIcons({
+      solvedRate: rates.solvedRate,
+      repliesRate: rates.repliesRate,
+      solvedColor: progressColor(rates.solvedRate, s.goals.solvedPerHour),
+      repliesColor: progressColor(rates.repliesRate, s.goals.repliesPerHour),
+    }),
+  });
 
   const m = metricsForDate(s);
   await chrome.action.setTitle({

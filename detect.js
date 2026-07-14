@@ -243,6 +243,61 @@ export function todayRates(state, dateKey = localDateKey()) {
   };
 }
 
+// --- Progress color (for the toolbar icon) -----------------------------------
+//
+// A rate's color reflects how close it is to its target (ratio = rate / goal):
+//   0%   -> red      (smoothly...)
+//   50%  -> amber    (...blending...)
+//   100% -> green    (...through to green)
+//   100%–150% -> stays solid green
+//   >=150% -> purple (overachieving)
+
+export const RATE_COLORS = {
+  red: "#ff4d4d",
+  amber: "#ffb020",
+  green: "#3ad07a",
+  purple: "#c77dff",
+};
+
+function hexToRgb(h) {
+  return [
+    parseInt(h.slice(1, 3), 16),
+    parseInt(h.slice(3, 5), 16),
+    parseInt(h.slice(5, 7), 16),
+  ];
+}
+
+function rgbToHex(rgb) {
+  return (
+    "#" +
+    rgb
+      .map((x) => Math.round(Math.min(255, Math.max(0, x))).toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
+function lerpHex(a, b, t) {
+  const A = hexToRgb(a);
+  const B = hexToRgb(b);
+  return rgbToHex([0, 1, 2].map((i) => A[i] + (B[i] - A[i]) * t));
+}
+
+/**
+ * Color for a rate given its goal: red -> amber -> green across 0..100% of goal,
+ * solid green from 100%..150%, purple at >=150%.
+ * @param {number} rate
+ * @param {number} goal
+ * @returns {string} hex color
+ */
+export function progressColor(rate, goal) {
+  const ratio = goal > 0 ? rate / goal : rate > 0 ? 2 : 1; // 0-goal edge case
+  if (ratio <= 0) return RATE_COLORS.red;
+  if (ratio >= 1.5) return RATE_COLORS.purple;
+  if (ratio >= 1.0) return RATE_COLORS.green;
+  if (ratio >= 0.5) return lerpHex(RATE_COLORS.amber, RATE_COLORS.green, (ratio - 0.5) / 0.5);
+  return lerpHex(RATE_COLORS.red, RATE_COLORS.amber, ratio / 0.5);
+}
+
 // --- Export / import ----------------------------------------------------------
 
 export const APP_ID = "zendesk-productivity-tracker";

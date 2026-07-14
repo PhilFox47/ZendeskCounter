@@ -35,11 +35,13 @@ submits never inflate anything.
 
 - **Toolbar icon** — the extension redraws its own icon to show today's two
   rates, stacked: **solved / hr on top, replies / hr below**, each to one
-  decimal (e.g. `2.7` over `6.5`). Each number is **green** when it's at or
-  above target and **amber** when it's below, so you can read your pace at a
+  decimal (e.g. `2.7` over `6.5`). Each number is **colored by its progress to
+  target**, smoothly: **red** at 0% → **amber** at 50% → **green** at 100%, then
+  it stays solid green up to 150%, and turns **purple** at 150%+ (overachieving).
+  The two numbers are colored independently, so you can read your pace at a
   glance without opening anything. (Chrome's badge only fits ~4 characters, so
-  the rates are drawn into the icon image itself rather than shown as badge
-  text.)
+  the rates are drawn — large — into the icon image itself rather than shown as
+  badge text.)
 - **Hover tooltip** — today's productive hours plus both counts and both rates.
 - **Popup** —
   - **Today**: productive hours, active blocks, and the two per-hour rates with
