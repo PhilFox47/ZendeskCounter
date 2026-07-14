@@ -31,6 +31,21 @@ A reply-and-solve in one submit counts as **both** +1 reply and +1 solved. A
 submit is only counted once its request returns HTTP 2xx, so cancelled or failed
 submits never inflate anything.
 
+### Known limitation: automatic solves aren't counted
+
+The extension only sees actions **you** perform in this browser. Tickets that
+Zendesk solves **automatically** — e.g. a pending ticket closed by a "solve after
+N days" automation when the customer never replies — are solved **server-side**,
+with no browser activity to observe, so they are **not counted** here.
+
+Practical effect: for solved tickets, this extension can read **lower** than your
+company's own Zendesk report, by exactly the number of your tickets that
+auto-solved. This is a deliberate trade-off: counting auto-solves would require
+the extension to actively poll the Zendesk API for your ticket data (it currently
+makes no network calls and reads nothing but your own submit flags), and those
+solves carry no productive time, so they'd distort the solved/hr rate. If you ever
+want them tracked as a separate opt-in stat, that's a feasible addition.
+
 ## The toolbar icon and popup
 
 - **Toolbar icon** — the extension redraws its own icon to show today's two
