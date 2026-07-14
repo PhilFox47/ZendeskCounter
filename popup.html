@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Zendesk Ticket Counter</title>
+  </head>
+  <body>
+    <h1>Zendesk Ticket Counter</h1>
+
+    <section class="group">
+      <h2>Today</h2>
+      <div class="cards">
+        <div class="card">
+          <span class="num" id="todayReplies">0</span>
+          <span class="label">Public replies</span>
+        </div>
+        <div class="card">
+          <span class="num" id="todaySolved">0</span>
+          <span class="label">Solved</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>All time</h2>
+      <div class="cards">
+        <div class="card muted">
+          <span class="num" id="totalReplies">0</span>
+          <span class="label">Public replies</span>
+        </div>
+        <div class="card muted">
+          <span class="num" id="totalSolved">0</span>
+          <span class="label">Solved</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="group">
+      <label for="badgeMetric">Badge shows</label>
+      <select id="badgeMetric">
+        <option value="solved">Solved (today)</option>
+        <option value="replies">Public replies (today)</option>
+        <option value="total">Replies + Solved (today)</option>
+      </select>
+    </section>
+
+    <div class="actions">
+      <button id="resetTotals" class="danger">Reset all-time</button>
+    </div>
+
+    <p class="hint" id="hint">Counting on this browser since install.</p>
+
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "zendesk-ticket-counter",
+  "version": "1.0.0",
+  "description": "Chrome extension that counts public replies and solved tickets in the Zendesk Agent Workspace.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "gen-icons": "node tools/gen-icons.mjs"
+  }
+}
