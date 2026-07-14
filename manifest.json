@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Zendesk Ticket Counter",
-  "version": "1.0.0",
-  "description": "Counts your public replies and solved tickets in the Zendesk Agent Workspace and shows the tally on the toolbar icon.",
+  "name": "Zendesk Productivity Tracker",
+  "version": "1.1.0",
+  "description": "Tracks your Zendesk productivity — solved/hr and replies/hr per 30-minute block — and shows both rates right on the toolbar icon.",
   "permissions": ["webRequest", "storage"],
   "host_permissions": ["*://*.zendesk.com/*"],
   "background": {
@@ -10,7 +10,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Zendesk Ticket Counter",
+    "default_title": "Zendesk Productivity Tracker",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

@@ -68,15 +68,6 @@
     </section>
 
     <section class="group settings">
-      <div class="row">
-        <label for="badgeMetric">Badge shows</label>
-        <select id="badgeMetric">
-          <option value="solved">Solved (today)</option>
-          <option value="replies">Public replies (today)</option>
-          <option value="total">Replies + Solved (today)</option>
-          <option value="productive">Productive hours (today)</option>
-        </select>
-      </div>
       <div class="row goals">
         <label>Targets / hr</label>
         <div class="goal-inputs">
@@ -90,7 +81,7 @@
       <button id="resetAll" class="danger">Reset all data</button>
     </div>
 
-    <p class="hint">Tracked on this browser. A 30-min block counts as productive on any ticket submit.</p>
+    <p class="hint">The toolbar icon shows solved/hr over replies/hr (green on target, amber below). A 30-min block counts as productive on any ticket submit. Tracked on this browser.</p>
 
     <script src="popup.js" type="module"></script>
   </body>

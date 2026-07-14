@@ -3,6 +3,7 @@ import {
   metricsForDate,
   sortedDays,
   localDateKey,
+  formatRate,
   DEFAULT_GOALS,
 } from "./detect.js";
 
@@ -20,7 +21,7 @@ function setState(state) {
   });
 }
 
-const fmt1 = (n) => (Math.round(n * 10) / 10).toString();
+const fmt1 = (n) => (Math.round(n * 10) / 10).toString(); // hours (e.g. "2", "2.5")
 
 function shortDate(key) {
   // key is YYYY-MM-DD; render as e.g. "Mon 14 Jul"
@@ -37,7 +38,7 @@ function applyRate(prefix, value, goal) {
   const el = document.getElementById("rate" + prefix[0].toUpperCase() + prefix.slice(1));
   const valEl = document.getElementById(prefix + "PerHour");
   const barEl = document.getElementById(prefix + "Bar");
-  valEl.textContent = fmt1(value);
+  valEl.textContent = formatRate(value);
   const pct = goal > 0 ? Math.min(100, (value / goal) * 100) : value > 0 ? 100 : 0;
   barEl.style.width = pct + "%";
   const met = value >= goal && goal > 0;
@@ -60,7 +61,6 @@ function render(state) {
   applyRate("replies", today.repliesPerHour, goals.repliesPerHour);
   applyRate("solved", today.solvedPerHour, goals.solvedPerHour);
 
-  document.getElementById("badgeMetric").value = s.badgeMetric;
   document.getElementById("goalRepliesInput").value = goals.repliesPerHour;
   document.getElementById("goalSolvedInput").value = goals.solvedPerHour;
 
@@ -83,9 +83,9 @@ function render(state) {
         `<td>${shortDate(r.date)}</td>` +
         `<td>${fmt1(r.productiveHours)}h</td>` +
         `<td>${r.replies}</td>` +
-        `<td class="${rHit ? "hit" : "miss"}">${fmt1(r.repliesPerHour)}</td>` +
+        `<td class="${rHit ? "hit" : "miss"}">${formatRate(r.repliesPerHour)}</td>` +
         `<td>${r.solved}</td>` +
-        `<td class="${sHit ? "hit" : "miss"}">${fmt1(r.solvedPerHour)}</td>`;
+        `<td class="${sHit ? "hit" : "miss"}">${formatRate(r.solvedPerHour)}</td>`;
       body.appendChild(tr);
     }
   }
@@ -95,20 +95,13 @@ async function init() {
   let state = await getState();
   render(state);
 
-  document.getElementById("badgeMetric").addEventListener("change", async (e) => {
-    state = await getState();
-    state.badgeMetric = e.target.value;
-    await setState(state);
-    chrome.runtime.sendMessage({ type: "refreshBadge" });
-  });
-
   async function updateGoal(field, value) {
     state = await getState();
     const n = Math.max(0, Math.floor(Number(value) || 0));
     state.goals = { ...state.goals, [field]: n };
     await setState(state);
     render(state);
-    chrome.runtime.sendMessage({ type: "refreshBadge" });
+    chrome.runtime.sendMessage({ type: "refreshAction" });
   }
   document
     .getElementById("goalRepliesInput")
@@ -125,7 +118,7 @@ async function init() {
     state.days = {};
     await setState(state);
     render(state);
-    chrome.runtime.sendMessage({ type: "refreshBadge" });
+    chrome.runtime.sendMessage({ type: "refreshAction" });
   });
 }
 

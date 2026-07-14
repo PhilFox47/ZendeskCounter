@@ -14,12 +14,13 @@ import {
   deltaFromRequestBody,
   applyActivity,
   normalize,
-  badgeText,
   metricsForDate,
+  todayRates,
+  formatRate,
 } from "./detect.js";
+import { makeIcons } from "./icon.js";
 
 const STORAGE_KEY = "counterState";
-const BADGE_BG = "#2f7a3e"; // green
 
 // requestId -> pending delta captured in onBeforeRequest, consumed in onCompleted.
 const pending = new Map();
@@ -52,20 +53,19 @@ function decodeRequestBody(requestBody) {
   return "";
 }
 
-function fmtRate(n) {
-  return (Math.round(n * 10) / 10).toString();
-}
-
-async function updateBadge(state) {
+// Draw today's solved/hr (top) and replies/hr (bottom) onto the toolbar icon,
+// and keep the hover tooltip as the detailed breakdown. No badge number.
+async function updateAction(state) {
   const s = normalize(state);
-  await chrome.action.setBadgeText({ text: badgeText(s) });
-  await chrome.action.setBadgeBackgroundColor({ color: BADGE_BG });
+  const rates = todayRates(s);
+  await chrome.action.setIcon({ imageData: makeIcons(rates) });
+
   const m = metricsForDate(s);
   await chrome.action.setTitle({
     title:
-      `Zendesk today — ${fmtRate(m.productiveHours)}h productive\n` +
-      `Replies ${m.replies} (${fmtRate(m.repliesPerHour)}/h) · ` +
-      `Solved ${m.solved} (${fmtRate(m.solvedPerHour)}/h)`,
+      `Zendesk today — ${formatRate(m.productiveHours)}h productive\n` +
+      `Solved ${formatRate(m.solvedPerHour)}/h (${m.solved}) · ` +
+      `Replies ${formatRate(m.repliesPerHour)}/h (${m.replies})`,
   });
 }
 
@@ -74,7 +74,7 @@ function commitDelta(delta, when) {
     const state = await getState();
     const next = applyActivity(state, delta, when);
     await setState(next);
-    await updateBadge(next);
+    await updateAction(next);
   });
   return writeChain;
 }
@@ -114,21 +114,21 @@ chrome.webRequest.onErrorOccurred.addListener(
   { urls: ["*://*.zendesk.com/api/graphql*"] }
 );
 
-// Keep the badge correct across service-worker restarts and popup changes.
-async function refreshBadge() {
+// Keep the icon correct across service-worker restarts and popup changes.
+async function refreshAction() {
   const state = await getState();
-  await updateBadge(state);
+  await updateAction(state);
 }
 
-chrome.runtime.onStartup.addListener(refreshBadge);
-chrome.runtime.onInstalled.addListener(refreshBadge);
+chrome.runtime.onStartup.addListener(refreshAction);
+chrome.runtime.onInstalled.addListener(refreshAction);
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes[STORAGE_KEY]) {
-    updateBadge(normalize(changes[STORAGE_KEY].newValue));
+    updateAction(normalize(changes[STORAGE_KEY].newValue));
   }
 });
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.type === "refreshBadge") refreshBadge();
+  if (msg && msg.type === "refreshAction") refreshAction();
 });

@@ -8,7 +8,6 @@ export const UPDATE_TICKET_OPERATION = "UpdateTicketMutation";
 // happened in it. Targets are per productive hour.
 export const BLOCKS_PER_DAY = 48;
 export const DEFAULT_GOALS = { repliesPerHour: 7, solvedPerHour: 3 };
-const BADGE_METRICS = ["solved", "replies", "total", "productive"];
 
 /**
  * Parse a GraphQL request body (string) into an array of operation objects.
@@ -94,7 +93,6 @@ export function blockLabel(index) {
 // State shape:
 // {
 //   days: { "YYYY-MM-DD": { replies, solved, blocks: [sorted unique 0..47] } },
-//   badgeMetric: "solved" | "replies" | "total" | "productive",
 //   goals: { repliesPerHour, solvedPerHour }
 // }
 
@@ -112,7 +110,6 @@ export function emptyDay() {
 export function normalize(state) {
   const base = {
     days: {},
-    badgeMetric: "solved",
     goals: { ...DEFAULT_GOALS },
   };
   if (!state || typeof state !== "object") return base;
@@ -128,7 +125,6 @@ export function normalize(state) {
     };
   }
 
-  if (BADGE_METRICS.includes(state.badgeMetric)) base.badgeMetric = state.badgeMetric;
   base.goals = { ...DEFAULT_GOALS, ...(state.goals || {}) };
 
   for (const key of Object.keys(base.days)) {
@@ -220,31 +216,29 @@ export function sortedDays(state) {
     .map((date) => ({ date, ...dayMetrics(s.days[date]) }));
 }
 
-// --- Badge --------------------------------------------------------------------
+// --- Rates (for the toolbar icon) --------------------------------------------
 
-export function badgeValue(state) {
-  const s = normalize(state);
-  const m = metricsForDate(s);
-  switch (s.badgeMetric) {
-    case "replies":
-      return m.replies;
-    case "total":
-      return m.replies + m.solved;
-    case "productive":
-      return m.productiveHours;
-    case "solved":
-    default:
-      return m.solved;
-  }
+/** Format a rate to exactly one decimal, e.g. 6.5 -> "6.5", 8 -> "8.0". */
+export function formatRate(n) {
+  return (Math.round(n * 10) / 10).toFixed(1);
 }
 
-/** Badge label string (empty when zero; hours get one decimal). */
-export function badgeText(state) {
+/**
+ * Today's solved/hr and replies/hr with whether each is at or above target.
+ * A rate only counts as "on target" once there is some productive time.
+ * @param {object} state
+ * @param {string} dateKey
+ * @returns {{solvedRate:number, repliesRate:number, solvedOnTarget:boolean, repliesOnTarget:boolean, productiveHours:number}}
+ */
+export function todayRates(state, dateKey = localDateKey()) {
   const s = normalize(state);
-  const v = badgeValue(s);
-  if (!v) return "";
-  if (s.badgeMetric === "productive") {
-    return (Math.round(v * 10) / 10).toString();
-  }
-  return String(v);
+  const m = metricsForDate(s, dateKey);
+  const g = s.goals;
+  return {
+    solvedRate: m.solvedPerHour,
+    repliesRate: m.repliesPerHour,
+    productiveHours: m.productiveHours,
+    solvedOnTarget: m.productiveHours > 0 && m.solvedPerHour >= g.solvedPerHour,
+    repliesOnTarget: m.productiveHours > 0 && m.repliesPerHour >= g.repliesPerHour,
+  };
 }

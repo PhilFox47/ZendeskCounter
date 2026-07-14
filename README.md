@@ -31,17 +31,22 @@ A reply-and-solve in one submit counts as **both** +1 reply and +1 solved. A
 submit is only counted once its request returns HTTP 2xx, so cancelled or failed
 submits never inflate anything.
 
-## The badge and popup
+## The toolbar icon and popup
 
-- **Toolbar badge** — one number, selectable in the popup: today's *solved*
-  (default), *public replies*, *replies + solved*, or *productive hours*.
+- **Toolbar icon** — the extension redraws its own icon to show today's two
+  rates, stacked: **solved / hr on top, replies / hr below**, each to one
+  decimal (e.g. `2.7` over `6.5`). Each number is **green** when it's at or
+  above target and **amber** when it's below, so you can read your pace at a
+  glance without opening anything. (Chrome's badge only fits ~4 characters, so
+  the rates are drawn into the icon image itself rather than shown as badge
+  text.)
 - **Hover tooltip** — today's productive hours plus both counts and both rates.
 - **Popup** —
   - **Today**: productive hours, active blocks, and the two per-hour rates with
     goal bars (green when the target is met, amber when not).
   - **By day**: a table of every recorded day with productive hours, counts, and
     per-hour rates, each rate colored by whether it hit target.
-  - **Settings**: badge metric, editable targets, and a reset-all button.
+  - **Settings**: editable targets and a reset-all button.
 
 Days are kept separately; each new local day starts fresh while history is
 retained.

@@ -11,8 +11,8 @@ import {
   dayMetrics,
   totals,
   sortedDays,
-  badgeValue,
-  badgeText,
+  todayRates,
+  formatRate,
   blockIndex,
   localDateKey,
 } from "../detect.js";
@@ -179,25 +179,43 @@ test("sortedDays returns newest first with metrics", () => {
   assert.equal(days[1].date, "2026-07-14");
 });
 
-// --- Badge -------------------------------------------------------------------
+// --- Icon rates --------------------------------------------------------------
 
-test("badge reflects selected metric including productive hours", () => {
-  let s = normalize(undefined);
-  const now = new Date();
-  s = applyActivity(s, { replies: 3, solved: 2, activity: true }, now);
-  const key = localDateKey(now);
-  const m = metricsForDate(s, key);
-  assert.equal(m.productiveHours, 0.5);
-  assert.equal(badgeValue({ ...s, badgeMetric: "solved" }), 2);
-  assert.equal(badgeValue({ ...s, badgeMetric: "replies" }), 3);
-  assert.equal(badgeValue({ ...s, badgeMetric: "total" }), 5);
-  assert.equal(badgeValue({ ...s, badgeMetric: "productive" }), 0.5);
-  assert.equal(badgeText({ ...s, badgeMetric: "productive" }), "0.5");
-  assert.equal(badgeText({ ...s, badgeMetric: "solved" }), "2");
+test("formatRate always shows exactly one decimal", () => {
+  assert.equal(formatRate(6.5), "6.5");
+  assert.equal(formatRate(8), "8.0");
+  assert.equal(formatRate(0), "0.0");
+  assert.equal(formatRate(2.66), "2.7"); // rounds to one decimal
+  assert.equal(formatRate(10), "10.0");
 });
 
-test("badge is empty when zero", () => {
-  assert.equal(badgeText(normalize(undefined)), "");
+test("todayRates reports rates and per-target status", () => {
+  // 0.5 productive hour; 3 solved -> 6/h (>=3 on target); 2 replies -> 4/h (<7 below)
+  let s = normalize(undefined);
+  const when = new Date(2026, 6, 14, 11, 5);
+  s = applyActivity(s, { replies: 2, solved: 3, activity: true }, when);
+  const r = todayRates(s, "2026-07-14");
+  assert.equal(r.solvedRate, 6);
+  assert.equal(r.repliesRate, 4);
+  assert.equal(r.solvedOnTarget, true);
+  assert.equal(r.repliesOnTarget, false);
+});
+
+test("todayRates: no productive time -> zero rates, nothing on target", () => {
+  const r = todayRates(normalize(undefined), "2026-07-14");
+  assert.equal(r.solvedRate, 0);
+  assert.equal(r.repliesRate, 0);
+  assert.equal(r.solvedOnTarget, false);
+  assert.equal(r.repliesOnTarget, false);
+});
+
+test("todayRates respects custom goals", () => {
+  let s = normalize({ days: {}, goals: { repliesPerHour: 4, solvedPerHour: 10 } });
+  s = applyActivity(s, { replies: 3, solved: 3, activity: true }, new Date(2026, 6, 14, 11, 5));
+  const r = todayRates(s, "2026-07-14");
+  // 0.5h -> replies 6/h (>=4 ok), solved 6/h (<10 below)
+  assert.equal(r.repliesOnTarget, true);
+  assert.equal(r.solvedOnTarget, false);
 });
 
 // --- Migration / normalization ----------------------------------------------
@@ -213,7 +231,6 @@ test("normalize migrates the legacy counter-only shape", () => {
   assert.equal(s.days["2026-07-10"].replies, 4);
   assert.equal(s.days["2026-07-10"].solved, 2);
   assert.deepEqual(s.days["2026-07-10"].blocks, []);
-  assert.equal(s.badgeMetric, "replies");
   assert.deepEqual(s.goals, { repliesPerHour: 7, solvedPerHour: 3 });
 });
 
