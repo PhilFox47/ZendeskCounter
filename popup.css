@@ -6,6 +6,9 @@
   --accent: #2f7a3e;
   --border: #e2e6ea;
   --danger: #c0392b;
+  --good: #2f7a3e;
+  --bad: #c07000;
+  --bar-track: #e2e6ea;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -17,6 +20,9 @@
     --accent: #57b368;
     --border: #333a41;
     --danger: #e06457;
+    --good: #57b368;
+    --bad: #e0a54f;
+    --bar-track: #333a41;
   }
 }
 
@@ -25,7 +31,7 @@
 }
 
 body {
-  width: 280px;
+  width: 340px;
   margin: 0;
   padding: 14px 16px 16px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -39,7 +45,7 @@ h1 {
 }
 
 .group {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 h2 {
@@ -54,6 +60,7 @@ h2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  margin-bottom: 12px;
 }
 
 .card {
@@ -68,14 +75,10 @@ h2 {
 }
 
 .num {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   line-height: 1;
   color: var(--accent);
-}
-
-.card.muted .num {
-  color: var(--fg);
 }
 
 .label {
@@ -84,21 +87,172 @@ h2 {
   text-align: center;
 }
 
-label[for="badgeMetric"] {
-  display: block;
+/* Rate tiles ---------------------------------------------------------------- */
+.rates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rate {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.rate-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.rate-name {
+  font-size: 11px;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.rate-goal {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.rate-body {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.rate-val {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.rate.good .rate-val {
+  color: var(--good);
+}
+.rate.bad .rate-val {
+  color: var(--bad);
+}
+
+.rate-sub {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bar-track);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--good);
+  transition: width 0.2s ease;
+}
+
+.rate.bad .bar-fill {
+  background: var(--bad);
+}
+
+/* History table ------------------------------------------------------------- */
+.history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.history th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.history th:first-child {
+  text-align: left;
+}
+
+.history td {
+  text-align: right;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.history td:first-child {
+  text-align: left;
+  color: var(--muted);
+}
+
+.history td.hit {
+  color: var(--good);
+  font-weight: 600;
+}
+.history td.miss {
+  color: var(--bad);
+}
+
+.history tr.today td:first-child {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+.empty {
   font-size: 11px;
   color: var(--muted);
-  margin-bottom: 6px;
+  text-align: center;
+  margin: 8px 0 0;
+}
+
+/* Settings ------------------------------------------------------------------ */
+.settings .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.settings label {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 select {
-  width: 100%;
-  padding: 7px 8px;
+  padding: 6px 8px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--fg);
-  font-size: 13px;
+  font-size: 12px;
+  max-width: 190px;
+}
+
+.goal-inputs {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.goal-inputs input {
+  width: 44px;
+  padding: 5px 6px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  font-size: 12px;
 }
 
 .actions {
@@ -125,4 +279,5 @@ button.danger:hover {
   color: var(--muted);
   margin: 12px 0 0;
   text-align: center;
+  line-height: 1.4;
 }

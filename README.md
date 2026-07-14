@@ -1,64 +1,81 @@
-# Zendesk Ticket Counter
+# Zendesk Productivity Tracker
 
-A Chrome extension (Manifest V3) that counts, per agent and per browser, how many
-**public replies** you send and how many tickets you **submit as solved** in the
-Zendesk Agent Workspace — and shows the running tally right on the toolbar icon.
+A Chrome extension (Manifest V3) that turns your Zendesk Agent Workspace activity
+into a productivity view: it counts **public replies** and **solved tickets**,
+tracks **productive time in 30-minute blocks**, and reports your **replies-per-hour
+and solved-per-hour** against targets — per day, on this browser.
 
-## What it counts
+## How productivity is measured
 
-Detection is based on the actual GraphQL mutation the Agent Workspace sends when
-you submit a ticket (`POST /api/graphql`, operation `UpdateTicketMutation`),
-confirmed against captured traffic:
+- **Productive block** — any 30-minute wall-clock block (`:00–:30`, `:30–:00`) in
+  which you made *any* ticket submit: an internal note, a public reply, a solve,
+  or a field change. A submit at 11:12 marks the **11:00–11:30** block productive.
+- **Productive time** = number of productive blocks × 30 minutes.
+- **Rates** = counts ÷ productive hours, compared to your targets
+  (defaults: **7 public replies / hr**, **3 solved / hr** — editable in the popup).
 
-| You did… | Payload signal | Counted as |
+## What counts as what
+
+Detection is based on the actual GraphQL mutation the Agent Workspace sends on
+submit (`POST /api/graphql`, operation `UpdateTicketMutation`), confirmed against
+captured traffic:
+
+| You did… | Payload signal | Effect |
 | --- | --- | --- |
-| Public reply (any status short of solved) | `ticket.comment.isPublic === true` | **+1 public reply** |
-| Submit as Solved (with a public reply) | `isPublic === true` **and** `status === "SOLVED"` | **+1 reply and +1 solved** |
-| Submit as Solved (with an internal note / no comment) | `status === "SOLVED"` | **+1 solved** |
-| Internal note only | `isPublic === false` | **nothing** |
+| Any ticket submit | operation `UpdateTicketMutation` | marks the current 30-min block **productive** |
+| Public reply | `ticket.comment.isPublic === true` | **+1 public reply** |
+| Submit as Solved | `ticket.status === "SOLVED"` | **+1 solved** |
+| Internal note only | `isPublic === false` | productive block only (no reply/solve) |
 
-A submit is only counted once the request completes with an HTTP 2xx, so
-cancelled or failed submits never inflate the numbers.
+A reply-and-solve in one submit counts as **both** +1 reply and +1 solved. A
+submit is only counted once its request returns HTTP 2xx, so cancelled or failed
+submits never inflate anything.
 
 ## The badge and popup
 
-- **Toolbar badge** — shows one number: today's *solved* count by default. Use the
-  popup dropdown to switch it to *public replies* or *replies + solved*.
-- **Hover tooltip** — shows both of today's numbers, e.g.
-  `Zendesk today — Replies: 12 · Solved: 5`.
-- **Popup** — shows today's replies/solved and all-time replies/solved, plus a
-  reset button.
+- **Toolbar badge** — one number, selectable in the popup: today's *solved*
+  (default), *public replies*, *replies + solved*, or *productive hours*.
+- **Hover tooltip** — today's productive hours plus both counts and both rates.
+- **Popup** —
+  - **Today**: productive hours, active blocks, and the two per-hour rates with
+    goal bars (green when the target is met, amber when not).
+  - **By day**: a table of every recorded day with productive hours, counts, and
+    per-hour rates, each rate colored by whether it hit target.
+  - **Settings**: badge metric, editable targets, and a reset-all button.
 
-Counters roll over automatically at local midnight: "today" resets to zero while
-the all-time totals keep accumulating.
+Days are kept separately; each new local day starts fresh while history is
+retained.
 
 ## Install (unpacked)
 
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode** (top right).
 3. Click **Load unpacked** and select this folder.
-4. Open a ticket in Zendesk and submit a reply — the badge updates.
+4. Open a ticket in Zendesk and submit — the badge and popup update.
 
-By default the extension is scoped to `*.zendesk.com`. If your Agent Workspace
-is on a vanity domain, add it to `host_permissions` in `manifest.json` and to the
-three `chrome.webRequest.*.addListener` URL filters in `background.js`.
+By default the extension is scoped to `*.zendesk.com`. For a vanity workspace
+domain, add it to `host_permissions` in `manifest.json` and to the three
+`chrome.webRequest.*.addListener` URL filters in `background.js`.
 
 ## Notes and limitations
 
-- Counts are **local to this browser** (stored via `chrome.storage.local`) and
-  begin at install — there is no historical back-fill and no sync across machines.
-- Each solved submit increments the solved counter, including re-submitting an
-  already-solved ticket.
-- No page scripts are injected and no ticket content is read or stored — the
-  extension only inspects the `isPublic` flag and `status` of your own submits.
+- All data is **local to this browser** (`chrome.storage.local`) and starts at
+  install — no historical back-fill, no cross-machine sync.
+- "Activity" is a ticket **submit**. Reading tickets, typing without submitting,
+  or navigating are not observable as submits and do not mark a block productive.
+- Each solved submit increments solved, including re-submitting an already-solved
+  ticket.
+- No page scripts are injected and no ticket content is read or stored — only the
+  `isPublic` flag and `status` of your own submits, plus submit timestamps.
 
 ## Development
 
 ```bash
-npm test            # runs the detection/counting unit tests (node:test)
-npm run gen-icons   # regenerates icons/ from tools/gen-icons.mjs
+npm test            # detection + productivity/rate unit tests (node:test)
+npm run gen-icons   # regenerate icons/ from tools/gen-icons.mjs
 ```
 
-The detection and counting logic lives in `detect.js` (pure, no browser APIs) so
-it can be tested in Node. `test/detect.test.mjs` exercises it against the three
-real Zendesk scenarios plus edge cases.
+Pure logic (detection, block/rate math, per-day state) lives in `detect.js` with
+no browser APIs, so it is unit-tested in Node. `test/detect.test.mjs` covers the
+three real Zendesk scenarios plus block indexing, rates, per-day separation,
+badge, and legacy-state migration.

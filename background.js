@@ -1,19 +1,21 @@
 // Service worker: observes Zendesk Agent Workspace ticket-submit requests,
-// counts public replies and solved submits, and reflects them on the badge.
+// counts public replies and solved submits, marks 30-minute productivity
+// blocks, and reflects the selected metric on the badge.
 //
 // Detection is confirmed against captured HAR payloads:
 //   POST /api/graphql, operationName "UpdateTicketMutation"
 //     variables.ticket.comment.isPublic === true  -> public reply
 //     variables.ticket.status === "SOLVED"         -> solved
-// We read the request body via chrome.webRequest and only count a submit that
-// completes with an HTTP 200, so failed/cancelled submits don't inflate counts.
+//     (any UpdateTicketMutation)                    -> activity -> productive block
+// We only count a submit that completes with an HTTP 2xx, so failed/cancelled
+// submits don't inflate anything.
 
 import {
   deltaFromRequestBody,
-  applyDelta,
-  rollover,
-  badgeValue,
-  localDateKey,
+  applyActivity,
+  normalize,
+  badgeText,
+  metricsForDate,
 } from "./detect.js";
 
 const STORAGE_KEY = "counterState";
@@ -28,7 +30,7 @@ let writeChain = Promise.resolve();
 function getState() {
   return new Promise((resolve) => {
     chrome.storage.local.get(STORAGE_KEY, (res) => {
-      resolve(rollover(res[STORAGE_KEY]));
+      resolve(normalize(res[STORAGE_KEY]));
     });
   });
 }
@@ -50,21 +52,27 @@ function decodeRequestBody(requestBody) {
   return "";
 }
 
+function fmtRate(n) {
+  return (Math.round(n * 10) / 10).toString();
+}
+
 async function updateBadge(state) {
-  const value = badgeValue(state);
-  const text = value > 0 ? String(value) : "";
-  await chrome.action.setBadgeText({ text });
+  const s = normalize(state);
+  await chrome.action.setBadgeText({ text: badgeText(s) });
   await chrome.action.setBadgeBackgroundColor({ color: BADGE_BG });
-  const t = state.today || { replies: 0, solved: 0 };
+  const m = metricsForDate(s);
   await chrome.action.setTitle({
-    title: `Zendesk today — Replies: ${t.replies} · Solved: ${t.solved}`,
+    title:
+      `Zendesk today — ${fmtRate(m.productiveHours)}h productive\n` +
+      `Replies ${m.replies} (${fmtRate(m.repliesPerHour)}/h) · ` +
+      `Solved ${m.solved} (${fmtRate(m.solvedPerHour)}/h)`,
   });
 }
 
-function commitDelta(delta) {
+function commitDelta(delta, when) {
   writeChain = writeChain.then(async () => {
     const state = await getState();
-    const next = applyDelta(state, delta, localDateKey());
+    const next = applyActivity(state, delta, when);
     await setState(next);
     await updateBadge(next);
   });
@@ -77,7 +85,7 @@ chrome.webRequest.onBeforeRequest.addListener(
     if (details.method !== "POST") return;
     const body = decodeRequestBody(details.requestBody);
     const delta = deltaFromRequestBody(body);
-    if (delta.replies > 0 || delta.solved > 0) {
+    if (delta.activity) {
       pending.set(details.requestId, delta);
     }
   },
@@ -92,7 +100,7 @@ chrome.webRequest.onCompleted.addListener(
     if (!delta) return;
     pending.delete(details.requestId);
     if (details.statusCode >= 200 && details.statusCode < 300) {
-      commitDelta(delta);
+      commitDelta(delta, new Date());
     }
   },
   { urls: ["*://*.zendesk.com/api/graphql*"] }
@@ -106,11 +114,9 @@ chrome.webRequest.onErrorOccurred.addListener(
   { urls: ["*://*.zendesk.com/api/graphql*"] }
 );
 
-// Keep the badge correct across service-worker restarts, midnight rollover, and
-// changes made from the popup (metric switch / reset).
+// Keep the badge correct across service-worker restarts and popup changes.
 async function refreshBadge() {
   const state = await getState();
-  await setState(state); // persists any rollover reset
   await updateBadge(state);
 }
 
@@ -119,11 +125,10 @@ chrome.runtime.onInstalled.addListener(refreshBadge);
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes[STORAGE_KEY]) {
-    updateBadge(rollover(changes[STORAGE_KEY].newValue));
+    updateBadge(normalize(changes[STORAGE_KEY].newValue));
   }
 });
 
-// Handle explicit refresh requests from the popup.
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === "refreshBadge") refreshBadge();
 });

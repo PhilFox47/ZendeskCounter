@@ -4,53 +4,93 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="popup.css" />
-    <title>Zendesk Ticket Counter</title>
+    <title>Zendesk Productivity</title>
   </head>
   <body>
-    <h1>Zendesk Ticket Counter</h1>
+    <h1>Zendesk Productivity</h1>
 
     <section class="group">
       <h2>Today</h2>
       <div class="cards">
         <div class="card">
-          <span class="num" id="todayReplies">0</span>
-          <span class="label">Public replies</span>
+          <span class="num" id="prodHours">0</span>
+          <span class="label">Productive hours</span>
         </div>
         <div class="card">
-          <span class="num" id="todaySolved">0</span>
-          <span class="label">Solved</span>
+          <span class="num" id="prodBlocks">0</span>
+          <span class="label">Active blocks (×30m)</span>
+        </div>
+      </div>
+
+      <div class="rates">
+        <div class="rate" id="rateReplies">
+          <div class="rate-head">
+            <span class="rate-name">Public replies / hr</span>
+            <span class="rate-goal" id="goalReplies">target 7</span>
+          </div>
+          <div class="rate-body">
+            <span class="rate-val" id="repliesPerHour">0.0</span>
+            <span class="rate-sub"><span id="todayReplies">0</span> today</span>
+          </div>
+          <div class="bar"><div class="bar-fill" id="repliesBar"></div></div>
+        </div>
+
+        <div class="rate" id="rateSolved">
+          <div class="rate-head">
+            <span class="rate-name">Solved / hr</span>
+            <span class="rate-goal" id="goalSolved">target 3</span>
+          </div>
+          <div class="rate-body">
+            <span class="rate-val" id="solvedPerHour">0.0</span>
+            <span class="rate-sub"><span id="todaySolved">0</span> today</span>
+          </div>
+          <div class="bar"><div class="bar-fill" id="solvedBar"></div></div>
         </div>
       </div>
     </section>
 
     <section class="group">
-      <h2>All time</h2>
-      <div class="cards">
-        <div class="card muted">
-          <span class="num" id="totalReplies">0</span>
-          <span class="label">Public replies</span>
-        </div>
-        <div class="card muted">
-          <span class="num" id="totalSolved">0</span>
-          <span class="label">Solved</span>
-        </div>
-      </div>
+      <h2>By day</h2>
+      <table class="history">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Prod</th>
+            <th>Repl</th>
+            <th>/hr</th>
+            <th>Solv</th>
+            <th>/hr</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+      <p class="empty" id="historyEmpty">No activity recorded yet.</p>
     </section>
 
-    <section class="group">
-      <label for="badgeMetric">Badge shows</label>
-      <select id="badgeMetric">
-        <option value="solved">Solved (today)</option>
-        <option value="replies">Public replies (today)</option>
-        <option value="total">Replies + Solved (today)</option>
-      </select>
+    <section class="group settings">
+      <div class="row">
+        <label for="badgeMetric">Badge shows</label>
+        <select id="badgeMetric">
+          <option value="solved">Solved (today)</option>
+          <option value="replies">Public replies (today)</option>
+          <option value="total">Replies + Solved (today)</option>
+          <option value="productive">Productive hours (today)</option>
+        </select>
+      </div>
+      <div class="row goals">
+        <label>Targets / hr</label>
+        <div class="goal-inputs">
+          <input type="number" id="goalRepliesInput" min="0" step="1" /> repl
+          <input type="number" id="goalSolvedInput" min="0" step="1" /> solv
+        </div>
+      </div>
     </section>
 
     <div class="actions">
-      <button id="resetTotals" class="danger">Reset all-time</button>
+      <button id="resetAll" class="danger">Reset all data</button>
     </div>
 
-    <p class="hint" id="hint">Counting on this browser since install.</p>
+    <p class="hint">Tracked on this browser. A 30-min block counts as productive on any ticket submit.</p>
 
     <script src="popup.js" type="module"></script>
   </body>
