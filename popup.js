@@ -124,6 +124,11 @@ async function init() {
     chrome.runtime.sendMessage({ type: "refreshAction" });
   });
 
+  document.getElementById("openDashboard").addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("dashboard.html") });
+    window.close();
+  });
+
   // --- Export ---------------------------------------------------------------
   document.getElementById("exportBtn").addEventListener("click", async () => {
     const s = await getState();

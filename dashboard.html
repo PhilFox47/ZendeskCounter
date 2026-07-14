@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="dashboard.css" />
+    <title>Ticket Telemetry</title>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><span class="logo">▞▞</span> Ticket&nbsp;Telemetry</div>
+      <div class="daynav">
+        <button id="prevDay" class="nav" title="Earlier day">◀</button>
+        <select id="daySelect"></select>
+        <button id="nextDay" class="nav" title="Later day">▶</button>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="summary" id="summary"></section>
+
+      <section class="board" id="board">
+        <div class="board-head">
+          <h2>Sector Timing</h2>
+          <div class="legend" id="legend"></div>
+        </div>
+
+        <div class="track-row">
+          <div class="track-label">Solved<br /><span class="tgt" id="solvedTgt"></span></div>
+          <div class="track" id="trackSolved"></div>
+        </div>
+        <div class="track-row">
+          <div class="track-label">Replies<br /><span class="tgt" id="repliesTgt"></span></div>
+          <div class="track" id="trackReplies"></div>
+        </div>
+        <div class="track-row axisrow">
+          <div class="track-label"></div>
+          <div class="axis" id="axis"></div>
+        </div>
+
+        <p class="note" id="legacyNote" hidden>
+          Per-sector detail isn't available for this day (it predates sector
+          tracking) — the lit blocks show when you were active, without the
+          per-block breakdown.
+        </p>
+      </section>
+
+      <section class="recent">
+        <h2>Recent laps</h2>
+        <div id="recentList" class="recent-list"></div>
+      </section>
+    </main>
+
+    <div id="empty" class="empty-state" hidden>
+      <h1>No telemetry yet 🏁</h1>
+      <p>Handle a ticket in Zendesk and your first sectors will light up here.</p>
+    </div>
+
+    <script src="dashboard.js" type="module"></script>
+  </body>
+</html>

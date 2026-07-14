@@ -11,6 +11,7 @@ import {
   dayMetrics,
   totals,
   sortedDays,
+  blockSeries,
   todayRates,
   formatRate,
   blockIndex,
@@ -153,6 +154,38 @@ test("no productive time -> zero rates, not NaN", () => {
   assert.equal(m.solvedPerHour, 0);
 });
 
+test("per-block counts (blockStats) accumulate for the sector view", () => {
+  let s = normalize(undefined);
+  // block 22 (11:00): 2 replies + 1 solve; block 30 (15:00): 1 reply
+  s = applyActivity(s, { replies: 1, solved: 1, activity: true }, new Date(2026, 6, 14, 11, 5));
+  s = applyActivity(s, { replies: 1, solved: 0, activity: true }, new Date(2026, 6, 14, 11, 25));
+  s = applyActivity(s, { replies: 1, solved: 0, activity: true }, new Date(2026, 6, 14, 15, 0));
+  const series = blockSeries(s.days["2026-07-14"]);
+  assert.equal(series.length, 48);
+  assert.deepEqual(
+    { replies: series[22].replies, solved: series[22].solved, active: series[22].active },
+    { replies: 2, solved: 1, active: true }
+  );
+  assert.equal(series[22].repliesPerHour, 4); // 2 in 30 min = 4/hr
+  assert.equal(series[22].solvedPerHour, 2);
+  assert.equal(series[30].replies, 1);
+  assert.equal(series[23].active, false); // untouched block
+  assert.equal(series[23].replies, 0);
+  // per-block sums equal the day totals
+  const totR = series.reduce((a, b) => a + b.replies, 0);
+  const totS = series.reduce((a, b) => a + b.solved, 0);
+  assert.equal(totR, 3);
+  assert.equal(totS, 1);
+});
+
+test("legacy day (blocks array, no blockStats) yields an empty but valid series", () => {
+  const s = normalize({ days: { "2026-07-14": { replies: 5, solved: 2, blocks: [10, 11] } } });
+  const series = blockSeries(s.days["2026-07-14"]);
+  assert.equal(series.length, 48);
+  assert.equal(series[10].active, true); // still known to be active
+  assert.equal(series[10].replies, 0); // but no per-block breakdown
+});
+
 // --- Per-day separation ------------------------------------------------------
 
 test("activity is bucketed by local day", () => {
@@ -263,7 +296,9 @@ test("serializeState produces a versioned, self-describing envelope", () => {
   assert.equal(out.app, APP_ID);
   assert.equal(out.schema, 1);
   assert.equal(out.exportedAt, "2026-07-14T12:00:00.000Z");
-  assert.deepEqual(out.data.days["2026-07-14"], { replies: 5, solved: 2, blocks: [10, 11] });
+  assert.deepEqual(out.data.days["2026-07-14"], {
+    replies: 5, solved: 2, blocks: [10, 11], blockStats: {},
+  });
 });
 
 test("export -> import round trip preserves data", () => {
@@ -275,7 +310,9 @@ test("export -> import round trip preserves data", () => {
   const res = parseImport(text);
   assert.equal(res.ok, true);
   assert.equal(res.dayCount, 1);
-  assert.deepEqual(res.state.days["2026-07-14"], { replies: 9, solved: 4, blocks: [20, 21, 22] });
+  assert.deepEqual(res.state.days["2026-07-14"], {
+    replies: 9, solved: 4, blocks: [20, 21, 22], blockStats: {},
+  });
   assert.deepEqual(res.state.goals, { repliesPerHour: 6, solvedPerHour: 2 });
 });
 
@@ -310,6 +347,7 @@ test("parseImport sanitizes hostile/garbage day entries", () => {
     replies: 0, // clamped from -5
     solved: 2, // floored from 2.9
     blocks: [10], // 99 out of range, "x" non-int, duplicate removed
+    blockStats: {},
   });
   assert.equal(res.state.goals.repliesPerHour, 7); // invalid (-3) -> default
   assert.equal(res.state.goals.solvedPerHour, 3); // invalid ("abc") -> default
@@ -332,15 +370,20 @@ test("mergeStates unions blocks and keeps higher counts for overlapping days", (
     replies: 10, // max(10, 4)
     solved: 5, // max(3, 5)
     blocks: [10, 11, 12], // union
+    blockStats: {},
   });
-  assert.deepEqual(merged.days["2026-07-13"], { replies: 8, solved: 2, blocks: [20] });
+  assert.deepEqual(merged.days["2026-07-13"], {
+    replies: 8, solved: 2, blocks: [20], blockStats: {},
+  });
   assert.deepEqual(merged.goals, { repliesPerHour: 7, solvedPerHour: 3 }); // base goals kept
 });
 
 test("merging into an empty base equals the incoming data", () => {
   const incoming = seed({ "2026-07-14": { replies: 3, solved: 1, blocks: [5] } });
   const merged = mergeStates(normalize(undefined), incoming);
-  assert.deepEqual(merged.days["2026-07-14"], { replies: 3, solved: 1, blocks: [5] });
+  assert.deepEqual(merged.days["2026-07-14"], {
+    replies: 3, solved: 1, blocks: [5], blockStats: {},
+  });
 });
 
 // --- Progress color ----------------------------------------------------------

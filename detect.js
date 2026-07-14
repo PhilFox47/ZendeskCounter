@@ -97,7 +97,26 @@ export function blockLabel(index) {
 // }
 
 export function emptyDay() {
-  return { replies: 0, solved: 0, blocks: [] };
+  // `blocks` is the set of active 30-min block indices (kept for metrics);
+  // `blockStats` adds per-block reply/solve counts for the sector view.
+  return { replies: 0, solved: 0, blocks: [], blockStats: {} };
+}
+
+// Coerce a raw blockStats map to { "<idx>": { replies, solved } } with valid
+// indices and non-negative integer counts.
+function cleanBlockStats(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, v] of Object.entries(raw)) {
+    const idx = Number(k);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= BLOCKS_PER_DAY) continue;
+    if (!v || typeof v !== "object") continue;
+    out[idx] = {
+      replies: Math.max(0, Math.floor(Number(v.replies) || 0)),
+      solved: Math.max(0, Math.floor(Number(v.solved) || 0)),
+    };
+  }
+  return out;
 }
 
 /**
@@ -129,11 +148,19 @@ export function normalize(state) {
 
   for (const key of Object.keys(base.days)) {
     const d = base.days[key] || {};
-    const blocks = Array.isArray(d.blocks) ? d.blocks : [];
+    const blockStats = cleanBlockStats(d.blockStats);
+    // The active-block set is the union of any legacy `blocks` array and the
+    // keys of blockStats, so the two views can never disagree about activity.
+    const legacyBlocks = Array.isArray(d.blocks) ? d.blocks : [];
+    const active = new Set([
+      ...legacyBlocks.filter((n) => Number.isInteger(n) && n >= 0 && n < BLOCKS_PER_DAY),
+      ...Object.keys(blockStats).map(Number),
+    ]);
     base.days[key] = {
       replies: d.replies || 0,
       solved: d.solved || 0,
-      blocks: [...new Set(blocks)].sort((a, b) => a - b),
+      blocks: [...active].sort((a, b) => a - b),
+      blockStats,
     };
   }
   return base;
@@ -158,6 +185,14 @@ export function applyActivity(state, delta, when = new Date()) {
     if (!day.blocks.includes(bi)) {
       day.blocks = [...day.blocks, bi].sort((a, b) => a - b);
     }
+    const prev = day.blockStats[bi] || { replies: 0, solved: 0 };
+    day.blockStats = {
+      ...day.blockStats,
+      [bi]: {
+        replies: prev.replies + (delta.replies || 0),
+        solved: prev.solved + (delta.solved || 0),
+      },
+    };
   }
   next.days = { ...next.days, [key]: day };
   return next;
@@ -214,6 +249,32 @@ export function sortedDays(state) {
   return Object.keys(s.days)
     .sort((a, b) => (a < b ? 1 : -1))
     .map((date) => ({ date, ...dayMetrics(s.days[date]) }));
+}
+
+/**
+ * The day as 48 half-hour "sectors" for the dashboard timing board. Each entry
+ * carries its per-block reply/solved counts and the equivalent per-hour rate
+ * (a 30-min block of N counts = N × 2 per hour).
+ * @param {object} day
+ * @returns {Array<{index:number,label:string,active:boolean,replies:number,solved:number,repliesPerHour:number,solvedPerHour:number}>}
+ */
+export function blockSeries(day) {
+  const d = { ...emptyDay(), ...(day || {}) };
+  const activeSet = new Set(d.blocks);
+  const series = [];
+  for (let i = 0; i < BLOCKS_PER_DAY; i++) {
+    const bs = d.blockStats[i] || { replies: 0, solved: 0 };
+    series.push({
+      index: i,
+      label: blockLabel(i),
+      active: activeSet.has(i),
+      replies: bs.replies,
+      solved: bs.solved,
+      repliesPerHour: bs.replies * 2,
+      solvedPerHour: bs.solved * 2,
+    });
+  }
+  return series;
 }
 
 // --- Rates (for the toolbar icon) --------------------------------------------
@@ -317,10 +378,13 @@ function sanitizeDays(days) {
     const blocks = Array.isArray(val.blocks)
       ? val.blocks.filter((n) => Number.isInteger(n) && n >= 0 && n < BLOCKS_PER_DAY)
       : [];
+    // normalize() re-derives/cleans blockStats and the active set; here we only
+    // need to pass through a plausibly-shaped map for it to sanitize.
     out[key] = {
       replies: nonNegInt(val.replies),
       solved: nonNegInt(val.solved),
       blocks: [...new Set(blocks)].sort((a, b) => a - b),
+      blockStats: val.blockStats && typeof val.blockStats === "object" ? val.blockStats : {},
     };
   }
   return out;
@@ -398,13 +462,26 @@ export function mergeStates(base, incoming) {
   const days = { ...a.days };
   for (const [date, d] of Object.entries(b.days)) {
     const cur = days[date];
-    days[date] = cur
-      ? {
-          replies: Math.max(cur.replies, d.replies),
-          solved: Math.max(cur.solved, d.solved),
-          blocks: [...new Set([...cur.blocks, ...d.blocks])].sort((x, y) => x - y),
-        }
-      : d;
+    if (!cur) {
+      days[date] = d;
+      continue;
+    }
+    // Per-block: keep the higher count in each block, consistent with the
+    // max-per-day rule.
+    const blockStats = { ...cur.blockStats };
+    for (const [idx, bs] of Object.entries(d.blockStats)) {
+      const p = blockStats[idx] || { replies: 0, solved: 0 };
+      blockStats[idx] = {
+        replies: Math.max(p.replies, bs.replies),
+        solved: Math.max(p.solved, bs.solved),
+      };
+    }
+    days[date] = {
+      replies: Math.max(cur.replies, d.replies),
+      solved: Math.max(cur.solved, d.solved),
+      blocks: [...new Set([...cur.blocks, ...d.blocks])].sort((x, y) => x - y),
+      blockStats,
+    };
   }
   return normalize({ days, goals: a.goals });
 }

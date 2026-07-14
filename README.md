@@ -1,9 +1,13 @@
-# Zendesk Productivity Tracker
+# Ticket Telemetry
+
+*Live timing for your Zendesk support laps.*
 
 A Chrome extension (Manifest V3) that turns your Zendesk Agent Workspace activity
 into a productivity view: it counts **public replies** and **solved tickets**,
 tracks **productive time in 30-minute blocks**, and reports your **replies-per-hour
-and solved-per-hour** against targets — per day, on this browser.
+and solved-per-hour** against targets — per day, on this browser. It shows your
+current pace right on the toolbar icon, and a full **sector-timing dashboard**
+(F1-style) for the detail.
 
 ## How productivity is measured
 
@@ -64,6 +68,31 @@ want them tracked as a separate opt-in stat, that's a feasible addition.
   - **By day**: a table of every recorded day with productive hours, counts, and
     per-hour rates, each rate colored by whether it hit target.
   - **Settings**: editable targets, backup (export / import), and reset-all.
+  - **Open dashboard ↗**: opens the full-page sector-timing view (below).
+
+## The dashboard (sector timing)
+
+Click **Open dashboard ↗** in the popup (or use the extension's *Options* entry)
+to open a full browser tab styled after an F1 sector-timing board:
+
+- **Sector Timing** — the selected day is split into 48 half-hour "sectors"
+  (00:00–24:00), shown as two tracks: **Solved** and **Replies**. Each active
+  sector is filled with the same red→amber→green→purple color for how your pace
+  in that 30 minutes compares to target (a block of *N* = *N × 2* per hour), and
+  shows the count. Hover any sector for the exact time, count, and rate. Inactive
+  sectors stay empty; a sector you were active in but scored 0 on that metric
+  reads red.
+- **Summary cards** — productive time, solved/hr, replies/hr (colored), and your
+  best single 30-minute pace of the day.
+- **Recent laps** — the last two weeks, each day a compact pair of mini sector
+  strips with its day rates; click one to load it into the board. Day nav arrows
+  and a date picker move between days.
+
+The dashboard reads the same local data — no network, nothing new stored.
+
+> Per-sector detail exists from **v1.4** onward. Days recorded before that (or
+> imported from an older export) still show *when* you were active, just without
+> the per-sector breakdown (those blocks render neutral grey).
 
 ## Backup: export & import
 
