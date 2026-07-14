@@ -12,6 +12,7 @@ import {
   totals,
   sortedDays,
   blockSeries,
+  slotStatus,
   todayRates,
   formatRate,
   blockIndex,
@@ -184,6 +185,46 @@ test("legacy day (blocks array, no blockStats) yields an empty but valid series"
   assert.equal(series.length, 48);
   assert.equal(series[10].active, true); // still known to be active
   assert.equal(series[10].replies, 0); // but no per-block breakdown
+});
+
+// --- "Act now?" slot advisor -------------------------------------------------
+
+test("slotStatus: current block already active -> 'active' regardless of time", () => {
+  // 13:28 -> block 26 (13:00–13:30); mark it active
+  let s = normalize(undefined);
+  s = applyActivity(s, { replies: 1, solved: 0, activity: true }, new Date(2026, 6, 14, 13, 5));
+  const r = slotStatus(s, new Date(2026, 6, 14, 13, 28));
+  assert.equal(r.status, "active");
+  assert.equal(r.booked, true);
+  assert.equal(r.blockStart, "13:00");
+  assert.equal(r.blockEnd, "13:30");
+});
+
+test("slotStatus: idle block with plenty of time -> 'go'", () => {
+  const r = slotStatus(normalize(undefined), new Date(2026, 6, 14, 13, 10)); // 20 min left
+  assert.equal(r.status, "go");
+  assert.equal(r.booked, false);
+  assert.equal(Math.round(r.minsLeft), 20);
+});
+
+test("slotStatus: idle block nearly over -> 'wait' with minutes left", () => {
+  const r = slotStatus(normalize(undefined), new Date(2026, 6, 14, 13, 28)); // 2 min left
+  assert.equal(r.status, "wait");
+  assert.equal(r.minsLeftCeil, 2);
+  assert.equal(r.blockEnd, "13:30");
+});
+
+test("slotStatus: threshold boundary — just over stays 'go'", () => {
+  // default threshold 5 min; at 13:24 there are 6 min left -> go
+  assert.equal(slotStatus(normalize(undefined), new Date(2026, 6, 14, 13, 24)).status, "go");
+  // at 13:25:00 exactly 5 min left -> wait (<= threshold)
+  assert.equal(slotStatus(normalize(undefined), new Date(2026, 6, 14, 13, 25)).status, "wait");
+});
+
+test("slotStatus: last block of the day wraps end label to 00:00", () => {
+  const r = slotStatus(normalize(undefined), new Date(2026, 6, 14, 23, 45));
+  assert.equal(r.blockStart, "23:30");
+  assert.equal(r.blockEnd, "00:00");
 });
 
 // --- Per-day separation ------------------------------------------------------

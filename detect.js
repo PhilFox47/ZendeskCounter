@@ -98,7 +98,7 @@ export function blockLabel(index) {
 
 export function emptyDay() {
   // `blocks` is the set of active 30-min block indices (kept for metrics);
-  // `blockStats` adds per-block reply/solve counts for the sector view.
+  // `blockStats` adds per-block reply/solve counts for the timeline view.
   return { replies: 0, solved: 0, blocks: [], blockStats: {} };
 }
 
@@ -252,9 +252,9 @@ export function sortedDays(state) {
 }
 
 /**
- * The day as 48 half-hour "sectors" for the dashboard timing board. Each entry
- * carries its per-block reply/solved counts and the equivalent per-hour rate
- * (a 30-min block of N counts = N × 2 per hour).
+ * The day as 48 half-hour blocks for the dashboard timeline. Each entry carries
+ * its per-block reply/solved counts and the equivalent per-hour rate (a 30-min
+ * block of N counts = N × 2 per hour).
  * @param {object} day
  * @returns {Array<{index:number,label:string,active:boolean,replies:number,solved:number,repliesPerHour:number,solvedPerHour:number}>}
  */
@@ -301,6 +301,46 @@ export function todayRates(state, dateKey = localDateKey()) {
     productiveHours: m.productiveHours,
     solvedOnTarget: m.productiveHours > 0 && m.solvedPerHour >= g.solvedPerHour,
     repliesOnTarget: m.productiveHours > 0 && m.repliesPerHour >= g.repliesPerHour,
+  };
+}
+
+// --- "Act now?" slot advisor -------------------------------------------------
+
+// Below this many minutes left in an idle block, suggest waiting rather than
+// spending a whole 30-min block on a couple of minutes of work.
+export const SLOT_WAIT_THRESHOLD_MIN = 5;
+
+/**
+ * Whether *now* is a good moment to handle a ticket, from a block-efficiency
+ * angle:
+ *  - "active": the current 30-min block already has activity — keep going, it's
+ *    already counted.
+ *  - "go": the current block is idle but has plenty of time left — starting now
+ *    books it with room to work.
+ *  - "wait": the current block is idle and nearly over — waiting a moment lets
+ *    your next ticket book a fresh full block instead of this near-empty one.
+ * @param {object} state
+ * @param {Date} now
+ * @param {number} waitThresholdMin
+ */
+export function slotStatus(state, now = new Date(), waitThresholdMin = SLOT_WAIT_THRESHOLD_MIN) {
+  const s = normalize(state);
+  const day = s.days[localDateKey(now)] || emptyDay();
+  const idx = blockIndex(now);
+  const booked = day.blocks.includes(idx);
+  const minsLeft = 30 - ((now.getMinutes() % 30) + now.getSeconds() / 60);
+  let status;
+  if (booked) status = "active";
+  else if (minsLeft <= waitThresholdMin) status = "wait";
+  else status = "go";
+  return {
+    status,
+    booked,
+    blockStart: blockLabel(idx),
+    blockEnd: blockLabel((idx + 1) % BLOCKS_PER_DAY),
+    minsLeft,
+    minsLeftCeil: Math.max(1, Math.ceil(minsLeft)),
+    waitThresholdMin,
   };
 }
 

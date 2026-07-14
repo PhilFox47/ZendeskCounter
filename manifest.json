@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Ticket Telemetry",
-  "version": "1.4.0",
-  "description": "Live timing for your Zendesk support laps — tracks solved/hr and replies/hr per 30-minute block, on the toolbar icon and a full sector-timing dashboard.",
+  "version": "1.5.0",
+  "description": "Tracks your Zendesk solved/hr and replies/hr per 30-minute block — shown on the toolbar icon and a full timeline dashboard.",
   "permissions": ["webRequest", "storage"],
   "host_permissions": ["*://*.zendesk.com/*"],
   "background": {

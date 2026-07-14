@@ -4,6 +4,7 @@ import {
   sortedDays,
   localDateKey,
   formatRate,
+  slotStatus,
   serializeState,
   parseImport,
   mergeStates,
@@ -92,11 +93,44 @@ function render(state) {
       body.appendChild(tr);
     }
   }
+
+  renderSlot(s);
+}
+
+// "Act now?" indicator — recomputed on open, on a timer, and on data changes.
+function renderSlot(s) {
+  const slot = slotStatus(s, new Date());
+  const box = document.getElementById("slotNow");
+  const title = document.getElementById("slotTitle");
+  const sub = document.getElementById("slotSub");
+  box.classList.remove("go", "wait", "active");
+  box.classList.add(slot.status);
+  const blockWindow = `${slot.blockStart}–${slot.blockEnd}`;
+  if (slot.status === "active") {
+    title.textContent = "Productive slot active";
+    sub.textContent = `You've logged activity in this block (${blockWindow}). Keep going — it's already counted.`;
+  } else if (slot.status === "go") {
+    title.textContent = "Good time to start";
+    sub.textContent = `This block (${blockWindow}) is still open — a ticket now books it with ~${slot.minsLeftCeil} min to work.`;
+  } else {
+    title.textContent = `Maybe wait ~${slot.minsLeftCeil} min`;
+    sub.textContent = `Only ${slot.minsLeftCeil} min left in this block. Waiting for ${slot.blockEnd} books a fresh 30-min slot instead of this near-empty one.`;
+  }
 }
 
 async function init() {
   let state = await getState();
   render(state);
+
+  // Keep the "act now?" indicator live while the popup is open: tick the clock,
+  // and refresh everything if a submit lands via the background worker.
+  setInterval(() => renderSlot(state), 15000);
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.counterState) {
+      state = normalize(changes.counterState.newValue);
+      render(state);
+    }
+  });
 
   async function updateGoal(field, value) {
     state = await getState();

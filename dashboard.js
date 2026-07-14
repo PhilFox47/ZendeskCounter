@@ -39,7 +39,7 @@ function shortDate(key) {
   };
 }
 
-// A day is "legacy" (pre sector-tracking) when it has active blocks but no
+// A day is "legacy" (pre block-level tracking) when it has active blocks but no
 // per-block detail at all.
 function isLegacy(day) {
   return day.blocks.length > 0 && Object.keys(day.blockStats).length === 0;
@@ -72,7 +72,7 @@ function renderTrack(el, series, metric, goal, legacy, { mini } = {}) {
         div.classList.add("empty");
       } else if (color === "legacy") {
         div.classList.add("legacy");
-        div.title = `${cell.label} — active (no per-sector detail)`;
+        div.title = `${cell.label} — active (no per-block detail)`;
       } else {
         div.style.background = color;
         div.textContent = count > 0 ? String(count) : "";
@@ -101,10 +101,10 @@ function renderSummary(day, metrics) {
   const solvedColor = progressColor(metrics.solvedPerHour, goals.solvedPerHour);
   const repliesColor = progressColor(metrics.repliesPerHour, goals.repliesPerHour);
   const cards = [
-    { k: "Productive time", v: `${fmtHours(metrics.productiveHours)}h`, sub: `${metrics.productiveBlocks} active sectors` },
+    { k: "Productive time", v: `${fmtHours(metrics.productiveHours)}h`, sub: `${metrics.productiveBlocks} active blocks` },
     { k: "Solved / hr", v: formatRate(metrics.solvedPerHour), sub: `${metrics.solved} solved · target ${goals.solvedPerHour}`, color: solvedColor },
     { k: "Replies / hr", v: formatRate(metrics.repliesPerHour), sub: `${metrics.replies} replies · target ${goals.repliesPerHour}`, color: repliesColor },
-    { k: "Best solve sector", v: bestSector(day, "solved"), sub: "peak 30-min pace" },
+    { k: "Peak solve rate", v: peakRate(day, "solved"), sub: "best 30-min block" },
   ];
   const el = document.getElementById("summary");
   el.innerHTML = "";
@@ -119,7 +119,7 @@ function renderSummary(day, metrics) {
   }
 }
 
-function bestSector(day, metric) {
+function peakRate(day, metric) {
   const series = blockSeries(day);
   let best = null;
   for (const c of series) {

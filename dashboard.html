@@ -21,7 +21,7 @@
 
       <section class="board" id="board">
         <div class="board-head">
-          <h2>Sector Timing</h2>
+          <h2>Activity Timeline</h2>
           <div class="legend" id="legend"></div>
         </div>
 
@@ -39,21 +39,21 @@
         </div>
 
         <p class="note" id="legacyNote" hidden>
-          Per-sector detail isn't available for this day (it predates sector
-          tracking) — the lit blocks show when you were active, without the
+          Per-block detail isn't available for this day (it predates block-level
+          tracking) — the filled blocks show when you were active, without the
           per-block breakdown.
         </p>
       </section>
 
       <section class="recent">
-        <h2>Recent laps</h2>
+        <h2>Recent days</h2>
         <div id="recentList" class="recent-list"></div>
       </section>
     </main>
 
     <div id="empty" class="empty-state" hidden>
-      <h1>No telemetry yet 🏁</h1>
-      <p>Handle a ticket in Zendesk and your first sectors will light up here.</p>
+      <h1>No activity yet</h1>
+      <p>Handle a ticket in Zendesk and your timeline will start filling in here.</p>
     </div>
 
     <script src="dashboard.js" type="module"></script>
