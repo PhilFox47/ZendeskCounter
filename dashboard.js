@@ -6,6 +6,7 @@ import {
   blockLabel,
   formatRate,
   progressColor,
+  isBonusRate,
   localDateKey,
   BLOCKS_PER_DAY,
 } from "./detect.js";
@@ -50,10 +51,12 @@ let goals = null;
 let selectedDate = null;
 let dayList = []; // newest-first date keys
 
+// Returns null (empty), "legacy", "rainbow" (bonus tier > 250%), or a hex color.
 function cellColorFor(cell, metric, goal, legacy) {
   if (!cell.active) return null;
   if (legacy) return "legacy";
   const rate = metric === "solved" ? cell.solvedPerHour : cell.repliesPerHour;
+  if (isBonusRate(rate, goal)) return "rainbow";
   return progressColor(rate, goal);
 }
 
@@ -62,24 +65,27 @@ function renderTrack(el, series, metric, goal, legacy, { mini } = {}) {
   for (const cell of series) {
     const div = document.createElement("div");
     const color = cellColorFor(cell, metric, goal, legacy);
+    const isClass = color === "legacy" || color === "rainbow";
     if (mini) {
-      div.className = "mini-cell" + (color === "legacy" ? " legacy" : "");
-      if (color && color !== "legacy") div.style.background = color;
+      div.className = "mini-cell" + (isClass ? " " + color : "");
+      if (color && !isClass) div.style.background = color;
     } else {
       div.className = "cell";
       const count = metric === "solved" ? cell.solved : cell.replies;
+      const rate = metric === "solved" ? cell.solvedPerHour : cell.repliesPerHour;
       if (!cell.active) {
         div.classList.add("empty");
       } else if (color === "legacy") {
         div.classList.add("legacy");
         div.title = `${cell.label} — active (no per-block detail)`;
       } else {
-        div.style.background = color;
+        if (color === "rainbow") div.classList.add("rainbow");
+        else div.style.background = color;
         div.textContent = count > 0 ? String(count) : "";
-        const rate = metric === "solved" ? cell.solvedPerHour : cell.repliesPerHour;
+        const blockWindow = `${cell.label}–${blockLabel((cell.index + 1) % BLOCKS_PER_DAY)}`;
         div.title =
-          `${cell.label}–${blockLabel((cell.index + 1) % BLOCKS_PER_DAY)} · ` +
-          `${count} ${metric} (${formatRate(rate)}/hr)`;
+          `${blockWindow} · ${count} ${metric} (${formatRate(rate)}/hr)` +
+          (color === "rainbow" ? " ✨ bonus split!" : "");
       }
     }
     el.appendChild(div);

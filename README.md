@@ -96,6 +96,10 @@ to open a full browser tab with the detailed view:
 
 The dashboard reads the same local data — no network, nothing new stored.
 
+> 🌈 Easter egg: a single block above **250%** of its goal (e.g. 4+ solves or
+> 9+ replies in one 30 minutes) skips purple and gets an animated rainbow fill —
+> a little bonus for an especially strong split. (Honours `prefers-reduced-motion`.)
+
 > Per-block detail exists from **v1.4** onward. Days recorded before that (or
 > imported from an older export) still show *when* you were active, just without
 > the per-block breakdown (those blocks render neutral grey).

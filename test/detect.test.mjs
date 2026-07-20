@@ -21,6 +21,7 @@ import {
   parseImport,
   mergeStates,
   progressColor,
+  isBonusRate,
   RATE_COLORS,
   APP_ID,
 } from "../detect.js";
@@ -458,4 +459,12 @@ test("progressColor is red just above zero and green/purple at goal edges", () =
 test("progressColor handles a zero goal without dividing by zero", () => {
   assert.equal(progressColor(0, 0), RATE_COLORS.green); // nothing required, nothing done
   assert.equal(progressColor(5, 0), RATE_COLORS.purple); // any output beats a 0 target
+});
+
+test("isBonusRate: rainbow tier is strictly above 250% of goal", () => {
+  assert.equal(isBonusRate(7.5, 3), false); // exactly 250% -> still purple
+  assert.equal(isBonusRate(7.4, 3), false); // just under
+  assert.equal(isBonusRate(8, 3), true); // 4 solved in a 30-min block (8/hr) -> bonus
+  assert.equal(isBonusRate(2.9, 3), false); // below target
+  assert.equal(isBonusRate(5, 0), false); // zero goal never rainbows (guarded)
 });

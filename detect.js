@@ -399,6 +399,15 @@ export function progressColor(rate, goal) {
   return lerpHex(RATE_COLORS.red, RATE_COLORS.amber, ratio / 0.5);
 }
 
+// Hidden bonus tier: a split above this multiple of its goal earns the animated
+// rainbow treatment instead of purple.
+export const BONUS_RATIO = 2.5;
+
+/** True when a rate is more than 250% of its goal (the rainbow bonus tier). */
+export function isBonusRate(rate, goal) {
+  return goal > 0 && rate / goal > BONUS_RATIO;
+}
+
 // --- Export / import ----------------------------------------------------------
 
 export const APP_ID = "zendesk-productivity-tracker";

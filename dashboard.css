@@ -164,6 +164,29 @@ h2 {
 .cell.empty { color: transparent; }
 .cell.legacy { background: var(--track-legacy); }
 
+/* Hidden bonus tier: splits above 250% of goal get an animated rainbow. */
+@keyframes rainbow-shift {
+  to { background-position: 200% 50%; }
+}
+.cell.rainbow,
+.mini-cell.rainbow {
+  background-image: linear-gradient(
+    90deg,
+    #ff4d4d, #ffb020, #3ad07a, #35c3ff, #c77dff, #ff4d4d
+  );
+  background-size: 200% 100%;
+  background-position: 0% 50%;
+  animation: rainbow-shift 1.8s linear infinite;
+}
+.cell.rainbow {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cell.rainbow, .mini-cell.rainbow { animation: none; }
+}
+
 .axisrow { margin-top: 4px; }
 .axis {
   display: grid;
