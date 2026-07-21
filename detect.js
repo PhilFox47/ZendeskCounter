@@ -499,9 +499,9 @@ export function progressColor(rate, goal) {
 
 // Hidden bonus tier: a split above this multiple of its goal earns the animated
 // rainbow treatment instead of purple.
-export const BONUS_RATIO = 2.5;
+export const BONUS_RATIO = 3.33; // 333% of goal
 
-/** True when a rate is more than 250% of its goal (the rainbow bonus tier). */
+/** True when a rate is more than 333% of its goal (the rainbow bonus tier). */
 export function isBonusRate(rate, goal) {
   return goal > 0 && rate / goal > BONUS_RATIO;
 }

@@ -112,8 +112,8 @@ Toggle **Day / Week** in the header to switch to weekly reports:
 
 The dashboard reads the same local data — no network, nothing new stored.
 
-> 🌈 Easter egg: a single block above **250%** of its goal (e.g. 4+ solves or
-> 9+ replies in one 30 minutes) skips purple and gets an animated rainbow fill —
+> 🌈 Easter egg: a single block above **333%** of its goal (e.g. 6+ solves or
+> 12+ replies in one 30 minutes) skips purple and gets an animated rainbow fill —
 > a little bonus for an especially strong split. (Honours `prefers-reduced-motion`.)
 
 > Per-block detail exists from **v1.4** onward. Days recorded before that (or

@@ -527,10 +527,10 @@ test("progressColor handles a zero goal without dividing by zero", () => {
   assert.equal(progressColor(5, 0), RATE_COLORS.purple); // any output beats a 0 target
 });
 
-test("isBonusRate: rainbow tier is strictly above 250% of goal", () => {
-  assert.equal(isBonusRate(7.5, 3), false); // exactly 250% -> still purple
-  assert.equal(isBonusRate(7.4, 3), false); // just under
-  assert.equal(isBonusRate(8, 3), true); // 4 solved in a 30-min block (8/hr) -> bonus
+test("isBonusRate: rainbow tier is strictly above 333% of goal", () => {
+  assert.equal(isBonusRate(9.99, 3), false); // ~333% -> still purple
+  assert.equal(isBonusRate(10, 3), true); // >333% (6 solved in a 30-min block) -> bonus
+  assert.equal(isBonusRate(8, 3), false); // 267% -> purple now (was bonus at 250%)
   assert.equal(isBonusRate(2.9, 3), false); // below target
   assert.equal(isBonusRate(5, 0), false); // zero goal never rainbows (guarded)
 });
