@@ -15,6 +15,7 @@ import {
   slotStatus,
   todayRates,
   formatRate,
+  formatIconRate,
   blockIndex,
   localDateKey,
   serializeState,
@@ -268,6 +269,19 @@ test("formatRate always shows exactly one decimal", () => {
   assert.equal(formatRate(0), "0.0");
   assert.equal(formatRate(2.66), "2.7"); // rounds to one decimal
   assert.equal(formatRate(10), "10.0");
+});
+
+test("formatIconRate drops the decimal at 10 and above", () => {
+  assert.equal(formatIconRate(2.7), "2.7");
+  assert.equal(formatIconRate(6.5), "6.5");
+  assert.equal(formatIconRate(0), "0.0");
+  assert.equal(formatIconRate(9.9), "9.9"); // last one-decimal value
+  assert.equal(formatIconRate(9.94), "9.9"); // rounds down, stays decimal
+  assert.equal(formatIconRate(9.95), "10"); // would round to 10.0 -> integer instead
+  assert.equal(formatIconRate(10), "10");
+  assert.equal(formatIconRate(10.4), "10");
+  assert.equal(formatIconRate(12.6), "13");
+  assert.equal(formatIconRate(20), "20");
 });
 
 test("todayRates reports rates and per-target status", () => {

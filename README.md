@@ -58,9 +58,11 @@ want them tracked as a separate opt-in stat, that's a feasible addition.
   target**, smoothly: **red** at 0% → **amber** at 50% → **green** at 100%, then
   it stays solid green up to 150%, and turns **purple** at 150%+ (overachieving).
   The two numbers are colored independently, so you can read your pace at a
-  glance without opening anything. (Chrome's badge only fits ~4 characters, so
-  the rates are drawn — large — into the icon image itself rather than shown as
-  badge text.)
+  glance without opening anything. Values below 10 show one decimal (`6.5`); at
+  10 and above they drop the decimal (`10`, `13`) so the digits stay large
+  instead of shrinking to fit `10.0`. (Chrome's badge only fits ~4 characters,
+  so the rates are drawn — large — into the icon image itself rather than shown
+  as badge text.)
 - **Hover tooltip** — today's productive hours plus both counts and both rates.
 - **Popup** —
   - **Act now?**: a live indicator at the top advising whether this is a good

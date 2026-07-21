@@ -285,6 +285,17 @@ export function formatRate(n) {
 }
 
 /**
+ * Compact rate for the toolbar icon: one decimal below 10, but a whole number
+ * from 10 up (…9.9, then 10, 11…) so the digits stay large and never become a
+ * four-character "10.0". The switch is based on the *rounded* value, so 9.95
+ * shows as "10", not "10.0".
+ */
+export function formatIconRate(n) {
+  const oneDecimal = Math.round(n * 10) / 10;
+  return oneDecimal >= 10 ? String(Math.round(n)) : oneDecimal.toFixed(1);
+}
+
+/**
  * Today's solved/hr and replies/hr with whether each is at or above target.
  * A rate only counts as "on target" once there is some productive time.
  * @param {object} state

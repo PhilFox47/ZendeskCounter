@@ -3,7 +3,7 @@
 // Uses OffscreenCanvas, which is available in both the service worker and pages,
 // so the drawing can be verified/screenshotted outside the extension.
 
-import { formatRate } from "./detect.js";
+import { formatIconRate } from "./detect.js";
 
 const BG = "#12222b"; // dark slate — bright text reads well on it at small sizes
 
@@ -54,8 +54,8 @@ export function drawIcon(size, r) {
 
   const maxWidth = size * 0.9;
   const startPx = Math.round(size * 0.56); // ~18px at 32 — much larger than before
-  const solvedText = formatRate(r.solvedRate);
-  const repliesText = formatRate(r.repliesRate);
+  const solvedText = formatIconRate(r.solvedRate);
+  const repliesText = formatIconRate(r.repliesRate);
 
   fitFont(ctx, solvedText, maxWidth, startPx);
   ctx.fillStyle = r.solvedColor;
