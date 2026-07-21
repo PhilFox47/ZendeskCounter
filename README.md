@@ -71,7 +71,8 @@ want them tracked as a separate opt-in stat, that's a feasible addition.
     idle with plenty of time left ("good time to start"); **amber** if the block
     is idle and nearly over ("maybe wait ~N min for a fresh block, rather than
     spending a whole block on a couple of minutes"). It updates on a timer and
-    whenever a submit lands. The wait threshold is 5 minutes (`SLOT_WAIT_THRESHOLD_MIN`).
+    whenever a submit lands. The warning appears when **fewer than 15 minutes**
+    would be left in the block if you started now (`SLOT_WAIT_THRESHOLD_MIN`).
   - **Today**: productive hours, active blocks, and the two per-hour rates with
     goal bars (green when the target is met, amber when not).
   - **By day**: a table of every recorded day with productive hours, counts, and
@@ -95,6 +96,19 @@ to open a full browser tab with the detailed view:
 - **Recent days** — the last two weeks, each day a compact pair of mini timeline
   strips with its day rates; click one to load it into the timeline. Day-nav
   arrows and a date picker move between days.
+
+Toggle **Day / Week** in the header to switch to weekly reports:
+
+- Weeks are **calendar work weeks (Monday–Friday)**, not a rolling 7 days.
+  Saturday/Sunday activity is excluded from weekly figures (it still shows in the
+  daily view).
+- **Week summary** — productive time, solved/hr and replies/hr for the week
+  (over the week's total productive hours), and how many of the 5 weekdays you
+  were active.
+- **Mon–Fri breakdown** — one row per weekday with its mini timelines and rates;
+  click a weekday to jump to its daily view. Rest days are marked.
+- **Recent weeks** — each past week as a Mon–Fri heat strip with its week rates;
+  click to open it.
 
 The dashboard reads the same local data — no network, nothing new stored.
 

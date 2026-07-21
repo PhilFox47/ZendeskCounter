@@ -189,6 +189,55 @@ test("legacy day (blocks array, no blockStats) yields an empty but valid series"
   assert.equal(series[10].replies, 0); // but no per-block breakdown
 });
 
+// --- Weeks (Mon–Fri) ---------------------------------------------------------
+
+test("mondayOf returns the Monday of that week", async () => {
+  const { mondayOf } = await import("../detect.js");
+  assert.equal(mondayOf("2026-07-14"), "2026-07-13"); // Tue -> Mon 13
+  assert.equal(mondayOf("2026-07-13"), "2026-07-13"); // Mon -> itself
+  assert.equal(mondayOf("2026-07-17"), "2026-07-13"); // Fri -> Mon 13
+  assert.equal(mondayOf("2026-07-19"), "2026-07-13"); // Sun still belongs to that week
+  assert.equal(mondayOf("2026-07-20"), "2026-07-20"); // next Mon
+});
+
+test("weekdayKeys yields Mon–Fri only", async () => {
+  const { weekdayKeys } = await import("../detect.js");
+  assert.deepEqual(weekdayKeys("2026-07-13"), [
+    "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17",
+  ]);
+});
+
+test("weekAggregate sums Mon–Fri and excludes the weekend", async () => {
+  const { weekAggregate } = await import("../detect.js");
+  let s = normalize(undefined);
+  // Tue: 4 replies, 2 solved in one block (0.5h)
+  s = applyActivity(s, { replies: 4, solved: 2, activity: true }, new Date(2026, 6, 14, 9, 0));
+  // Thu: 2 replies, 1 solved in one block (0.5h)
+  s = applyActivity(s, { replies: 2, solved: 1, activity: true }, new Date(2026, 6, 16, 10, 0));
+  // Saturday: should be ignored by the weekly report
+  s = applyActivity(s, { replies: 9, solved: 9, activity: true }, new Date(2026, 6, 18, 10, 0));
+  const w = weekAggregate(s, "2026-07-13");
+  assert.equal(w.replies, 6); // 4 + 2, Saturday's 9 excluded
+  assert.equal(w.solved, 3);
+  assert.equal(w.productiveHours, 1); // two 0.5h blocks
+  assert.equal(w.worked, 2); // Tue + Thu
+  assert.equal(w.repliesPerHour, 6); // 6 / 1h
+  assert.equal(w.solvedPerHour, 3);
+  assert.equal(w.days.length, 5);
+  assert.equal(w.days[0].weekday, "Mon");
+  assert.equal(w.days[1].metrics.replies, 4); // Tue
+});
+
+test("sortedWeeks lists weeks with weekday activity, newest first, no weekend-only", async () => {
+  const { sortedWeeks } = await import("../detect.js");
+  let s = normalize(undefined);
+  s = applyActivity(s, { replies: 1, solved: 0, activity: true }, new Date(2026, 6, 14)); // Tue wk of 13
+  s = applyActivity(s, { replies: 1, solved: 0, activity: true }, new Date(2026, 6, 21)); // Tue wk of 20
+  s = applyActivity(s, { replies: 1, solved: 0, activity: true }, new Date(2026, 6, 19)); // Sunday only
+  const weeks = sortedWeeks(s);
+  assert.deepEqual(weeks, ["2026-07-20", "2026-07-13"]); // newest first; Sunday didn't add wk of 13 twice nor a lone week
+});
+
 // --- "Act now?" slot advisor -------------------------------------------------
 
 test("slotStatus: current block already active -> 'active' regardless of time", () => {
@@ -216,11 +265,14 @@ test("slotStatus: idle block nearly over -> 'wait' with minutes left", () => {
   assert.equal(r.blockEnd, "13:30");
 });
 
-test("slotStatus: threshold boundary — just over stays 'go'", () => {
-  // default threshold 5 min; at 13:24 there are 6 min left -> go
-  assert.equal(slotStatus(normalize(undefined), new Date(2026, 6, 14, 13, 24)).status, "go");
-  // at 13:25:00 exactly 5 min left -> wait (<= threshold)
-  assert.equal(slotStatus(normalize(undefined), new Date(2026, 6, 14, 13, 25)).status, "wait");
+test("slotStatus: warns when under 15 min would be available in a fresh slot", () => {
+  // threshold 15 min, strictly less-than.
+  // 13:15:00 -> exactly 15 min left -> still 'go' (15 is not < 15)
+  assert.equal(slotStatus(normalize(undefined), new Date(2026, 6, 14, 13, 15, 0)).status, "go");
+  // 13:16 -> 14 min left -> 'wait'
+  assert.equal(slotStatus(normalize(undefined), new Date(2026, 6, 14, 13, 16)).status, "wait");
+  // 13:10 -> 20 min left -> 'go'
+  assert.equal(slotStatus(normalize(undefined), new Date(2026, 6, 14, 13, 10)).status, "go");
 });
 
 test("slotStatus: last block of the day wraps end label to 00:00", () => {

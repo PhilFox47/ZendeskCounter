@@ -9,6 +9,10 @@ import {
   isBonusRate,
   localDateKey,
   BLOCKS_PER_DAY,
+  weekAggregate,
+  sortedWeeks,
+  mondayOf,
+  addDaysKey,
 } from "./detect.js";
 
 const STORAGE_KEY = "counterState";
@@ -23,12 +27,8 @@ const fmtHours = (n) => (Math.round(n * 10) / 10).toString();
 
 function prettyDate(key) {
   const [y, m, d] = key.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 }
 function shortDate(key) {
@@ -37,7 +37,17 @@ function shortDate(key) {
   return {
     main: dt.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }),
     year: dt.getFullYear(),
+    monthDay: dt.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
   };
+}
+function weekRangeLabel(monday) {
+  const friday = addDaysKey(monday, 4);
+  const [my, mm, md] = monday.split("-").map(Number);
+  const [fy, fm, fd] = friday.split("-").map(Number);
+  const mo = (mth, day) => new Date(2000, mth - 1, day).toLocaleDateString(undefined, { month: "short" });
+  return mm === fm
+    ? `${mo(mm, md)} ${md} – ${fd}, ${fy}`
+    : `${mo(mm, md)} ${md} – ${mo(fm, fd)} ${fd}, ${fy}`;
 }
 
 // A day is "legacy" (pre block-level tracking) when it has active blocks but no
@@ -48,8 +58,13 @@ function isLegacy(day) {
 
 let state = null;
 let goals = null;
+let mode = "day"; // "day" | "week"
 let selectedDate = null;
+let selectedWeek = null;
 let dayList = []; // newest-first date keys
+let weekList = []; // newest-first Monday keys
+
+// --- Shared rendering --------------------------------------------------------
 
 // Returns null (empty), "legacy", "rainbow" (bonus tier > 250%), or a hex color.
 function cellColorFor(cell, metric, goal, legacy) {
@@ -92,10 +107,42 @@ function renderTrack(el, series, metric, goal, legacy, { mini } = {}) {
   }
 }
 
+function legendHTML() {
+  return `<span>0%</span><div class="bar"></div><span>150%+</span><span style="margin-left:6px">of target</span>`;
+}
+
+function card(k, v, sub, color) {
+  return (
+    `<div class="scard"><div class="k">${k}</div>` +
+    `<div class="v"${color ? ` style="color:${color}"` : ""}>${v}</div>` +
+    `<div class="sub">${sub}</div></div>`
+  );
+}
+
+function rateChips(m) {
+  const sc = progressColor(m.solvedPerHour, goals.solvedPerHour);
+  const rc = progressColor(m.repliesPerHour, goals.repliesPerHour);
+  return (
+    `<div>S <b style="color:${sc}">${formatRate(m.solvedPerHour)}</b>/hr</div>` +
+    `<div>R <b style="color:${rc}">${formatRate(m.repliesPerHour)}</b>/hr</div>`
+  );
+}
+
+// --- Day view ----------------------------------------------------------------
+
+function peakRate(day, metric) {
+  const series = blockSeries(day);
+  let best = null;
+  for (const c of series) {
+    const rate = metric === "solved" ? c.solvedPerHour : c.repliesPerHour;
+    if (rate > 0 && (!best || rate > best.rate)) best = { rate };
+  }
+  return best ? `${formatRate(best.rate)}/hr` : "—";
+}
+
 function renderAxis() {
   const axis = document.getElementById("axis");
   axis.innerHTML = "";
-  // 24 columns, one label every 2 hours
   for (let h = 0; h < 24; h++) {
     const s = document.createElement("span");
     s.textContent = h % 2 === 0 ? String(h).padStart(2, "0") : "";
@@ -103,129 +150,213 @@ function renderAxis() {
   }
 }
 
-function renderSummary(day, metrics) {
-  const solvedColor = progressColor(metrics.solvedPerHour, goals.solvedPerHour);
-  const repliesColor = progressColor(metrics.repliesPerHour, goals.repliesPerHour);
-  const cards = [
-    { k: "Productive time", v: `${fmtHours(metrics.productiveHours)}h`, sub: `${metrics.productiveBlocks} active blocks` },
-    { k: "Solved / hr", v: formatRate(metrics.solvedPerHour), sub: `${metrics.solved} solved · target ${goals.solvedPerHour}`, color: solvedColor },
-    { k: "Replies / hr", v: formatRate(metrics.repliesPerHour), sub: `${metrics.replies} replies · target ${goals.repliesPerHour}`, color: repliesColor },
-    { k: "Peak solve rate", v: peakRate(day, "solved"), sub: "best 30-min block" },
-  ];
-  const el = document.getElementById("summary");
-  el.innerHTML = "";
-  for (const c of cards) {
-    const div = document.createElement("div");
-    div.className = "scard";
-    div.innerHTML =
-      `<div class="k">${c.k}</div>` +
-      `<div class="v"${c.color ? ` style="color:${c.color}"` : ""}>${c.v}</div>` +
-      `<div class="sub">${c.sub}</div>`;
-    el.appendChild(div);
-  }
-}
-
-function peakRate(day, metric) {
-  const series = blockSeries(day);
-  let best = null;
-  for (const c of series) {
-    const rate = metric === "solved" ? c.solvedPerHour : c.repliesPerHour;
-    if (rate > 0 && (!best || rate > best.rate)) best = { rate, label: c.label };
-  }
-  return best ? `${formatRate(best.rate)}/hr` : "—";
-}
-
-function renderLegend() {
-  const el = document.getElementById("legend");
-  el.innerHTML =
-    `<span>0%</span><div class="bar"></div><span>150%+</span>` +
-    `<span style="margin-left:6px">of target</span>`;
-}
-
-function renderBoard() {
+function renderDay() {
   const day = state.days[selectedDate];
-  const metrics = metricsForDate(state, selectedDate);
+  const m = metricsForDate(state, selectedDate);
   const legacy = isLegacy(day);
   const series = blockSeries(day);
 
+  const solvedColor = progressColor(m.solvedPerHour, goals.solvedPerHour);
+  const repliesColor = progressColor(m.repliesPerHour, goals.repliesPerHour);
+  document.getElementById("summary").innerHTML =
+    card("Productive time", `${fmtHours(m.productiveHours)}h`, `${m.productiveBlocks} active blocks`) +
+    card("Solved / hr", formatRate(m.solvedPerHour), `${m.solved} solved · target ${goals.solvedPerHour}`, solvedColor) +
+    card("Replies / hr", formatRate(m.repliesPerHour), `${m.replies} replies · target ${goals.repliesPerHour}`, repliesColor) +
+    card("Peak solve rate", peakRate(day, "solved"), "best 30-min block");
+
+  document.getElementById("legend").innerHTML = legendHTML();
   document.getElementById("solvedTgt").textContent = `target ${goals.solvedPerHour}/hr`;
   document.getElementById("repliesTgt").textContent = `target ${goals.repliesPerHour}/hr`;
-
-  renderSummary(day, metrics);
   renderTrack(document.getElementById("trackSolved"), series, "solved", goals.solvedPerHour, legacy);
   renderTrack(document.getElementById("trackReplies"), series, "replies", goals.repliesPerHour, legacy);
   renderAxis();
   document.getElementById("legacyNote").hidden = !legacy;
-}
 
-function renderRecent() {
   const el = document.getElementById("recentList");
   el.innerHTML = "";
   for (const date of dayList.slice(0, 14)) {
-    const day = state.days[date];
-    const m = metricsForDate(state, date);
-    const legacy = isLegacy(day);
-    const series = blockSeries(day);
+    const d = state.days[date];
+    const dm = metricsForDate(state, date);
     const sd = shortDate(date);
-
     const row = document.createElement("div");
     row.className = "recent-day" + (date === selectedDate ? " active" : "");
-    row.addEventListener("click", () => selectDay(date));
-
-    const dateCol = document.createElement("div");
-    dateCol.className = "rd-date";
-    dateCol.innerHTML = `${sd.main}<small>${sd.year} · ${fmtHours(m.productiveHours)}h</small>`;
-
+    row.addEventListener("click", () => selectPeriod(date));
     const tracks = document.createElement("div");
     tracks.className = "recent-tracks";
     const t1 = document.createElement("div"); t1.className = "mini-track";
     const t2 = document.createElement("div"); t2.className = "mini-track";
-    renderTrack(t1, series, "solved", goals.solvedPerHour, legacy, { mini: true });
-    renderTrack(t2, series, "replies", goals.repliesPerHour, legacy, { mini: true });
+    renderTrack(t1, blockSeries(d), "solved", goals.solvedPerHour, isLegacy(d), { mini: true });
+    renderTrack(t2, blockSeries(d), "replies", goals.repliesPerHour, isLegacy(d), { mini: true });
     tracks.append(t1, t2);
-
+    row.innerHTML = `<div class="rd-date">${sd.main}<small>${sd.year} · ${fmtHours(dm.productiveHours)}h</small></div>`;
+    row.appendChild(tracks);
     const rates = document.createElement("div");
     rates.className = "rd-rates";
-    const sc = progressColor(m.solvedPerHour, goals.solvedPerHour);
-    const rc = progressColor(m.repliesPerHour, goals.repliesPerHour);
-    rates.innerHTML =
-      `<div>S <b style="color:${sc}">${formatRate(m.solvedPerHour)}</b>/hr</div>` +
-      `<div>R <b style="color:${rc}">${formatRate(m.repliesPerHour)}</b>/hr</div>`;
-
-    row.append(dateCol, tracks, rates);
+    rates.innerHTML = rateChips(dm);
+    row.appendChild(rates);
     el.appendChild(row);
   }
 }
 
+// --- Week view ---------------------------------------------------------------
+
+function weekStrip(container, week, metric) {
+  container.innerHTML = "";
+  const goal = metric === "solved" ? goals.solvedPerHour : goals.repliesPerHour;
+  for (const d of week.days) {
+    const cell = document.createElement("div");
+    cell.className = "wk-cell";
+    const rate = metric === "solved" ? d.metrics.solvedPerHour : d.metrics.repliesPerHour;
+    if (d.metrics.productiveBlocks === 0) {
+      cell.classList.add("empty");
+    } else if (isBonusRate(rate, goal)) {
+      cell.classList.add("rainbow");
+    } else {
+      cell.style.background = progressColor(rate, goal);
+    }
+    cell.title = `${d.weekday}: ${metric === "solved" ? d.metrics.solved : d.metrics.replies} ${metric} (${formatRate(rate)}/hr)`;
+    container.appendChild(cell);
+  }
+}
+
+function renderWeek() {
+  if (!selectedWeek) {
+    document.getElementById("weekSummary").innerHTML =
+      `<div class="scard" style="grid-column:1/-1"><div class="k">No weekday activity yet</div>` +
+      `<div class="sub">Monday–Friday reports appear once you've handled tickets on a weekday.</div></div>`;
+    document.getElementById("weekRange").textContent = "—";
+    document.getElementById("weekDays").innerHTML = "";
+    document.getElementById("recentWeeks").innerHTML = "";
+    document.getElementById("weekLegend").innerHTML = "";
+    return;
+  }
+
+  const week = weekAggregate(state, selectedWeek);
+  document.getElementById("weekRange").textContent = weekRangeLabel(selectedWeek);
+  document.getElementById("weekLegend").innerHTML = legendHTML();
+
+  const solvedColor = progressColor(week.solvedPerHour, goals.solvedPerHour);
+  const repliesColor = progressColor(week.repliesPerHour, goals.repliesPerHour);
+  document.getElementById("weekSummary").innerHTML =
+    card("Productive time", `${fmtHours(week.productiveHours)}h`, `${week.productiveBlocks} active blocks`) +
+    card("Solved / hr", formatRate(week.solvedPerHour), `${week.solved} solved · target ${goals.solvedPerHour}`, solvedColor) +
+    card("Replies / hr", formatRate(week.repliesPerHour), `${week.replies} replies · target ${goals.repliesPerHour}`, repliesColor) +
+    card("Days worked", `${week.worked}/5`, "weekdays with activity");
+
+  // Mon–Fri breakdown rows
+  const wd = document.getElementById("weekDays");
+  wd.innerHTML = "";
+  for (const d of week.days) {
+    const sd = shortDate(d.date);
+    const worked = d.metrics.productiveBlocks > 0;
+    const row = document.createElement("div");
+    row.className = "recent-day week-day" + (d.date === selectedDate ? " active" : "");
+    row.addEventListener("click", () => { switchMode("day"); selectPeriod(d.date); });
+
+    row.innerHTML = `<div class="rd-date">${d.weekday}<small>${sd.monthDay}${worked ? " · " + fmtHours(d.metrics.productiveHours) + "h" : ""}</small></div>`;
+    const tracks = document.createElement("div");
+    tracks.className = "recent-tracks";
+    const t1 = document.createElement("div"); t1.className = "mini-track";
+    const t2 = document.createElement("div"); t2.className = "mini-track";
+    renderTrack(t1, blockSeries(d.day), "solved", goals.solvedPerHour, isLegacy(d.day), { mini: true });
+    renderTrack(t2, blockSeries(d.day), "replies", goals.repliesPerHour, isLegacy(d.day), { mini: true });
+    tracks.append(t1, t2);
+    row.appendChild(tracks);
+    const rates = document.createElement("div");
+    rates.className = "rd-rates";
+    rates.innerHTML = worked ? rateChips(d.metrics) : `<div class="rest">rest day</div>`;
+    row.appendChild(rates);
+    wd.appendChild(row);
+  }
+
+  // Recent weeks
+  const rw = document.getElementById("recentWeeks");
+  rw.innerHTML = "";
+  for (const monday of weekList.slice(0, 10)) {
+    const w = weekAggregate(state, monday);
+    const row = document.createElement("div");
+    row.className = "recent-day" + (monday === selectedWeek ? " active" : "");
+    row.addEventListener("click", () => selectPeriod(monday));
+    row.innerHTML = `<div class="rd-date">${weekRangeLabel(monday)}<small>${w.worked}/5 days · ${fmtHours(w.productiveHours)}h</small></div>`;
+    const strips = document.createElement("div");
+    strips.className = "recent-tracks";
+    const s1 = document.createElement("div"); s1.className = "wk-strip";
+    const s2 = document.createElement("div"); s2.className = "wk-strip";
+    weekStrip(s1, w, "solved");
+    weekStrip(s2, w, "replies");
+    strips.append(s1, s2);
+    row.appendChild(strips);
+    const rates = document.createElement("div");
+    rates.className = "rd-rates";
+    rates.innerHTML = rateChips(w);
+    row.appendChild(rates);
+    rw.appendChild(row);
+  }
+}
+
+// --- Mode + navigation -------------------------------------------------------
+
 function populateSelect() {
-  const sel = document.getElementById("daySelect");
+  const sel = document.getElementById("periodSelect");
   sel.innerHTML = "";
-  for (const date of dayList) {
+  const list = mode === "day" ? dayList : weekList;
+  for (const key of list) {
     const opt = document.createElement("option");
-    opt.value = date;
-    opt.textContent = prettyDate(date);
+    opt.value = key;
+    opt.textContent = mode === "day" ? prettyDate(key) : weekRangeLabel(key);
     sel.appendChild(opt);
   }
-  sel.value = selectedDate;
+  sel.value = mode === "day" ? selectedDate : selectedWeek;
 }
 
-function selectDay(date) {
-  selectedDate = date;
-  document.getElementById("daySelect").value = date;
-  renderBoard();
-  renderRecent();
+function render() {
+  if (mode === "day") renderDay();
+  else renderWeek();
 }
 
-function stepDay(delta) {
-  const i = dayList.indexOf(selectedDate);
-  const j = i + delta;
-  if (j >= 0 && j < dayList.length) selectDay(dayList[j]);
+function selectPeriod(key) {
+  if (mode === "day") selectedDate = key;
+  else selectedWeek = key;
+  document.getElementById("periodSelect").value = key;
+  render();
+}
+
+function stepPeriod(delta) {
+  const list = mode === "day" ? dayList : weekList;
+  const cur = mode === "day" ? selectedDate : selectedWeek;
+  const j = list.indexOf(cur) + delta;
+  if (j >= 0 && j < list.length) selectPeriod(list[j]);
+}
+
+function switchMode(m) {
+  if (m === mode) return;
+  mode = m;
+  for (const b of document.querySelectorAll("#modes .mode")) {
+    b.classList.toggle("active", b.dataset.mode === m);
+  }
+  document.getElementById("dayView").hidden = m !== "day";
+  document.getElementById("weekView").hidden = m !== "week";
+  populateSelect();
+  render();
+}
+
+function recomputeLists() {
+  dayList = sortedDays(state).map((d) => d.date);
+  weekList = sortedWeeks(state);
+  const today = localDateKey();
+  if (!selectedDate || !dayList.includes(selectedDate)) {
+    selectedDate = dayList.includes(today) ? today : dayList[0] || null;
+  }
+  const thisWeek = mondayOf(today);
+  if (!selectedWeek || !weekList.includes(selectedWeek)) {
+    selectedWeek = weekList.includes(thisWeek) ? thisWeek : weekList[0] || null;
+  }
 }
 
 async function init() {
   state = await getState();
   goals = state.goals;
-  dayList = sortedDays(state).map((d) => d.date);
+  recomputeLists();
 
   if (dayList.length === 0) {
     document.getElementById("main").hidden = true;
@@ -233,31 +364,24 @@ async function init() {
     return;
   }
 
-  const today = localDateKey();
-  selectedDate = dayList.includes(today) ? today : dayList[0];
-
   populateSelect();
-  renderLegend();
-  renderBoard();
-  renderRecent();
+  render();
 
-  document.getElementById("daySelect").addEventListener("change", (e) => selectDay(e.target.value));
-  // Newer days are earlier in dayList, so "◀ earlier" moves to a higher index.
-  document.getElementById("prevDay").addEventListener("click", () => stepDay(1));
-  document.getElementById("nextDay").addEventListener("click", () => stepDay(-1));
+  document.getElementById("periodSelect").addEventListener("change", (e) => selectPeriod(e.target.value));
+  document.getElementById("prevPeriod").addEventListener("click", () => stepPeriod(1)); // ◀ earlier = higher index
+  document.getElementById("nextPeriod").addEventListener("click", () => stepPeriod(-1));
+  for (const b of document.querySelectorAll("#modes .mode")) {
+    b.addEventListener("click", () => switchMode(b.dataset.mode));
+  }
 
-  // Live-update if tracking changes while the tab is open.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes[STORAGE_KEY]) return;
     state = normalize(changes[STORAGE_KEY].newValue);
     goals = state.goals;
-    dayList = sortedDays(state).map((d) => d.date);
-    if (!dayList.includes(selectedDate)) selectedDate = dayList[0] || null;
-    if (selectedDate) {
-      populateSelect();
-      renderBoard();
-      renderRecent();
-    }
+    recomputeLists();
+    if (dayList.length === 0) return;
+    populateSelect();
+    render();
   });
 }
 

@@ -251,6 +251,92 @@ export function sortedDays(state) {
     .map((date) => ({ date, ...dayMetrics(s.days[date]) }));
 }
 
+// --- Weeks (Monday–Friday work weeks) ----------------------------------------
+
+export const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+
+/** Shift a YYYY-MM-DD key by n days (local). */
+export function addDaysKey(dateKey, n) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + n);
+  return localDateKey(dt);
+}
+
+/** The Monday (YYYY-MM-DD) of the week containing the given date. */
+export function mondayOf(dateKey) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = dt.getDay(); // 0 Sun .. 6 Sat
+  dt.setDate(dt.getDate() + (dow === 0 ? -6 : 1 - dow));
+  return localDateKey(dt);
+}
+
+/** True for Saturday/Sunday keys. */
+export function isWeekend(dateKey) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  return dow === 0 || dow === 6;
+}
+
+/** The five weekday keys (Mon–Fri) for a given Monday. */
+export function weekdayKeys(mondayKey) {
+  return [0, 1, 2, 3, 4].map((n) => addDaysKey(mondayKey, n));
+}
+
+/**
+ * Aggregate a Monday–Friday work week. Weekend days are excluded by design.
+ * Rates are over the week's total productive hours.
+ * @param {object} state
+ * @param {string} mondayKey
+ */
+export function weekAggregate(state, mondayKey) {
+  const s = normalize(state);
+  const keys = weekdayKeys(mondayKey);
+  const days = keys.map((date, i) => ({
+    date,
+    weekday: WEEKDAY_LABELS[i],
+    present: !!s.days[date],
+    metrics: dayMetrics(s.days[date] || emptyDay()),
+    day: s.days[date] || emptyDay(),
+  }));
+  let replies = 0;
+  let solved = 0;
+  let productiveBlocks = 0;
+  let worked = 0;
+  for (const d of days) {
+    replies += d.metrics.replies;
+    solved += d.metrics.solved;
+    productiveBlocks += d.metrics.productiveBlocks;
+    if (d.metrics.productiveBlocks > 0) worked += 1;
+  }
+  const productiveHours = productiveBlocks * 0.5;
+  return {
+    monday: mondayKey,
+    friday: keys[4],
+    days,
+    worked,
+    replies,
+    solved,
+    productiveBlocks,
+    productiveHours,
+    repliesPerHour: productiveHours ? replies / productiveHours : 0,
+    solvedPerHour: productiveHours ? solved / productiveHours : 0,
+  };
+}
+
+/** Monday keys (newest-first) for weeks that have any Mon–Fri activity. */
+export function sortedWeeks(state) {
+  const s = normalize(state);
+  const set = new Set();
+  for (const date of Object.keys(s.days)) {
+    if (isWeekend(date)) continue; // weekend activity doesn't create a week report
+    if (s.days[date].blocks.length === 0) continue;
+    set.add(mondayOf(date));
+  }
+  return [...set].sort((a, b) => (a < b ? 1 : -1));
+}
+
 /**
  * The day as 48 half-hour blocks for the dashboard timeline. Each entry carries
  * its per-block reply/solved counts and the equivalent per-hour rate (a 30-min
@@ -317,9 +403,10 @@ export function todayRates(state, dateKey = localDateKey()) {
 
 // --- "Act now?" slot advisor -------------------------------------------------
 
-// Below this many minutes left in an idle block, suggest waiting rather than
-// spending a whole 30-min block on a couple of minutes of work.
-export const SLOT_WAIT_THRESHOLD_MIN = 5;
+// When fewer than this many minutes remain in an idle block, suggest waiting:
+// starting now would give you less than this much usable time in the block
+// before it rolls over.
+export const SLOT_WAIT_THRESHOLD_MIN = 15;
 
 /**
  * Whether *now* is a good moment to handle a ticket, from a block-efficiency
@@ -342,7 +429,7 @@ export function slotStatus(state, now = new Date(), waitThresholdMin = SLOT_WAIT
   const minsLeft = 30 - ((now.getMinutes() % 30) + now.getSeconds() / 60);
   let status;
   if (booked) status = "active";
-  else if (minsLeft <= waitThresholdMin) status = "wait";
+  else if (minsLeft < waitThresholdMin) status = "wait";
   else status = "go";
   return {
     status,

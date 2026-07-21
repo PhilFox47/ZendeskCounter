@@ -9,46 +9,73 @@
   <body>
     <header>
       <div class="brand"><span class="logo">▞▞</span> Ticket&nbsp;Telemetry</div>
-      <div class="daynav">
-        <button id="prevDay" class="nav" title="Earlier day">◀</button>
-        <select id="daySelect"></select>
-        <button id="nextDay" class="nav" title="Later day">▶</button>
+      <div class="header-right">
+        <div class="modes" id="modes">
+          <button data-mode="day" class="mode active">Day</button>
+          <button data-mode="week" class="mode">Week</button>
+        </div>
+        <div class="daynav">
+          <button id="prevPeriod" class="nav" title="Earlier">◀</button>
+          <select id="periodSelect"></select>
+          <button id="nextPeriod" class="nav" title="Later">▶</button>
+        </div>
       </div>
     </header>
 
     <main id="main">
-      <section class="summary" id="summary"></section>
+      <!-- Day view -->
+      <div id="dayView">
+        <section class="summary" id="summary"></section>
 
-      <section class="board" id="board">
-        <div class="board-head">
-          <h2>Activity Timeline</h2>
-          <div class="legend" id="legend"></div>
-        </div>
+        <section class="board" id="board">
+          <div class="board-head">
+            <h2>Activity Timeline</h2>
+            <div class="legend" id="legend"></div>
+          </div>
 
-        <div class="track-row">
-          <div class="track-label">Solved<br /><span class="tgt" id="solvedTgt"></span></div>
-          <div class="track" id="trackSolved"></div>
-        </div>
-        <div class="track-row">
-          <div class="track-label">Replies<br /><span class="tgt" id="repliesTgt"></span></div>
-          <div class="track" id="trackReplies"></div>
-        </div>
-        <div class="track-row axisrow">
-          <div class="track-label"></div>
-          <div class="axis" id="axis"></div>
-        </div>
+          <div class="track-row">
+            <div class="track-label">Solved<br /><span class="tgt" id="solvedTgt"></span></div>
+            <div class="track" id="trackSolved"></div>
+          </div>
+          <div class="track-row">
+            <div class="track-label">Replies<br /><span class="tgt" id="repliesTgt"></span></div>
+            <div class="track" id="trackReplies"></div>
+          </div>
+          <div class="track-row axisrow">
+            <div class="track-label"></div>
+            <div class="axis" id="axis"></div>
+          </div>
 
-        <p class="note" id="legacyNote" hidden>
-          Per-block detail isn't available for this day (it predates block-level
-          tracking) — the filled blocks show when you were active, without the
-          per-block breakdown.
-        </p>
-      </section>
+          <p class="note" id="legacyNote" hidden>
+            Per-block detail isn't available for this day (it predates block-level
+            tracking) — the filled blocks show when you were active, without the
+            per-block breakdown.
+          </p>
+        </section>
 
-      <section class="recent">
-        <h2>Recent days</h2>
-        <div id="recentList" class="recent-list"></div>
-      </section>
+        <section class="recent">
+          <h2>Recent days</h2>
+          <div id="recentList" class="recent-list"></div>
+        </section>
+      </div>
+
+      <!-- Week view -->
+      <div id="weekView" hidden>
+        <section class="summary" id="weekSummary"></section>
+
+        <section class="board">
+          <div class="board-head">
+            <h2>This week — <span id="weekRange"></span></h2>
+            <div class="legend" id="weekLegend"></div>
+          </div>
+          <div id="weekDays" class="week-days"></div>
+        </section>
+
+        <section class="recent">
+          <h2>Recent weeks</h2>
+          <div id="recentWeeks" class="recent-list"></div>
+        </section>
+      </div>
     </main>
 
     <div id="empty" class="empty-state" hidden>

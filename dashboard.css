@@ -57,7 +57,34 @@ header {
   margin-right: 6px;
 }
 
+.header-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .daynav { display: flex; align-items: center; gap: 8px; }
+
+.modes { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.modes .mode {
+  background: var(--panel);
+  color: var(--muted);
+  border: none;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.modes .mode + .mode { border-left: 1px solid var(--border); }
+.modes .mode.active { background: #c77dff; color: #fff; }
+
+/* Week view */
+.week-days { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.recent-day.week-day .rd-date { font-size: 14px; }
+.recent-day .rd-rates .rest { color: var(--muted); font-style: italic; font-size: 12px; }
+.wk-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
+.wk-cell { height: 9px; border-radius: 2px; background: var(--track-empty); }
+.wk-cell.rainbow {
+  background-image: linear-gradient(90deg, #ff4d4d, #ffb020, #3ad07a, #35c3ff, #c77dff, #ff4d4d);
+  background-size: 200% 100%;
+  animation: rainbow-shift 1.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .wk-cell.rainbow { animation: none; } }
 
 .nav {
   background: var(--panel);
