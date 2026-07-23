@@ -3,15 +3,19 @@
 // blocks, and reflects the selected metric on the badge.
 //
 // Detection is confirmed against captured HAR payloads:
-//   POST /api/graphql, operationName "UpdateTicketMutation"
+//   POST /api/graphql, operationName "UpdateTicketMutation" (ticket updates):
 //     variables.ticket.comment.isPublic === true  -> public reply
 //     variables.ticket.status === "SOLVED"         -> solved
 //     (any UpdateTicketMutation)                    -> activity -> productive block
+//   POST /api/v2/tickets.json (new ticket, REST create):
+//     ticket.comment present & public !== false     -> public reply (default public)
+//     ticket.status === "solved"                    -> solved
+//     (any create)                                  -> activity -> productive block
 // We only count a submit that completes with an HTTP 2xx, so failed/cancelled
 // submits don't inflate anything.
 
 import {
-  deltaFromRequestBody,
+  deltaFromRequest,
   applyActivity,
   normalize,
   metricsForDate,
@@ -22,6 +26,13 @@ import {
 import { makeIcons } from "./icon.js";
 
 const STORAGE_KEY = "counterState";
+
+// Ticket updates (replies/solves/notes) go through GraphQL; new tickets go
+// through the REST create endpoint. Watch both.
+const WATCH_URLS = [
+  "*://*.zendesk.com/api/graphql*",
+  "*://*.zendesk.com/api/v2/tickets.json*",
+];
 
 // requestId -> pending delta captured in onBeforeRequest, consumed in onCompleted.
 const pending = new Map();
@@ -92,12 +103,12 @@ chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (details.method !== "POST") return;
     const body = decodeRequestBody(details.requestBody);
-    const delta = deltaFromRequestBody(body);
+    const delta = deltaFromRequest(details.url, details.method, body);
     if (delta.activity) {
       pending.set(details.requestId, delta);
     }
   },
-  { urls: ["*://*.zendesk.com/api/graphql*"] },
+  { urls: WATCH_URLS },
   ["requestBody"]
 );
 
@@ -111,7 +122,7 @@ chrome.webRequest.onCompleted.addListener(
       commitDelta(delta, new Date());
     }
   },
-  { urls: ["*://*.zendesk.com/api/graphql*"] }
+  { urls: WATCH_URLS }
 );
 
 // 3) Clean up on failure so the map doesn't leak.
@@ -119,7 +130,7 @@ chrome.webRequest.onErrorOccurred.addListener(
   (details) => {
     pending.delete(details.requestId);
   },
-  { urls: ["*://*.zendesk.com/api/graphql*"] }
+  { urls: WATCH_URLS }
 );
 
 // Keep the icon correct across service-worker restarts and popup changes.

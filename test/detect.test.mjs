@@ -4,6 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   deltaFromRequestBody,
+  deltaFromTicketCreate,
+  deltaFromRequest,
   analyzeUpdateTicket,
   applyActivity,
   normalize,
@@ -82,6 +84,61 @@ test("internal note -> no reply/solve but IS activity (marks productive)", () =>
     solved: 0,
     activity: true,
   });
+});
+
+// --- New ticket (REST create) — faithful to captured POST /api/v2/tickets.json
+
+test("new ticket create counts as a public reply (comment public by default)", () => {
+  const body = JSON.stringify({
+    ticket: {
+      subject: "Beschädigte Sendung",
+      comment: { html_body: "<p>Hello</p>" }, // no `public` field -> defaults public
+      requester: { email: "shop@example.com", name: "" },
+    },
+  });
+  assert.deepEqual(deltaFromTicketCreate(body), { replies: 1, solved: 0, activity: true });
+});
+
+test("new ticket with an internal-only comment -> activity, no reply", () => {
+  const body = JSON.stringify({ ticket: { comment: { body: "note", public: false } } });
+  assert.deepEqual(deltaFromTicketCreate(body), { replies: 0, solved: 0, activity: true });
+});
+
+test("new ticket created-and-solved -> reply + solved", () => {
+  const body = JSON.stringify({ ticket: { comment: { html_body: "x" }, status: "solved" } });
+  assert.deepEqual(deltaFromTicketCreate(body), { replies: 1, solved: 1, activity: true });
+});
+
+test("ticket create with no comment -> activity only", () => {
+  assert.deepEqual(deltaFromTicketCreate(JSON.stringify({ ticket: { subject: "x" } })), {
+    replies: 0, solved: 0, activity: true,
+  });
+});
+
+test("ticket create: malformed / non-ticket body -> nothing", () => {
+  assert.deepEqual(deltaFromTicketCreate("nope"), { replies: 0, solved: 0, activity: false });
+  assert.deepEqual(deltaFromTicketCreate(JSON.stringify({ foo: 1 })), {
+    replies: 0, solved: 0, activity: false,
+  });
+});
+
+test("deltaFromRequest routes GraphQL vs REST create by URL", () => {
+  const create = JSON.stringify({ ticket: { comment: { html_body: "x" } } });
+  // GraphQL update endpoint -> uses the mutation parser
+  assert.deepEqual(
+    deltaFromRequest("https://x.zendesk.com/api/graphql", "POST", publicReplySolved),
+    { replies: 1, solved: 1, activity: true }
+  );
+  // REST create endpoint -> uses the create parser
+  assert.deepEqual(
+    deltaFromRequest("https://x.zendesk.com/api/v2/tickets.json", "POST", create),
+    { replies: 1, solved: 0, activity: true }
+  );
+  // REST update (PUT to a specific ticket) is NOT treated as a create
+  assert.deepEqual(
+    deltaFromRequest("https://x.zendesk.com/api/v2/tickets/123.json", "PUT", create),
+    { replies: 0, solved: 0, activity: false }
+  );
 });
 
 test("unrelated GraphQL op -> no activity", () => {

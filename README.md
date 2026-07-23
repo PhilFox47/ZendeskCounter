@@ -20,16 +20,18 @@ detail.
 
 ## What counts as what
 
-Detection is based on the actual GraphQL mutation the Agent Workspace sends on
-submit (`POST /api/graphql`, operation `UpdateTicketMutation`), confirmed against
-captured traffic:
+Detection is based on the actual requests the Agent Workspace sends, confirmed
+against captured traffic. Ticket **updates** go through a GraphQL mutation
+(`POST /api/graphql`, operation `UpdateTicketMutation`); **new tickets** are
+created through the REST API (`POST /api/v2/tickets.json`):
 
 | You did… | Payload signal | Effect |
 | --- | --- | --- |
-| Any ticket submit | operation `UpdateTicketMutation` | marks the current 30-min block **productive** |
+| Any ticket submit / create | `UpdateTicketMutation` or ticket create | marks the current 30-min block **productive** |
 | Public reply | `ticket.comment.isPublic === true` | **+1 public reply** |
 | Submit as Solved | `ticket.status === "SOLVED"` | **+1 solved** |
 | Internal note only | `isPublic === false` | productive block only (no reply/solve) |
+| **New ticket** with a message | REST create, `comment.public !== false` | **+1 public reply** (its first comment is public by default) |
 
 A reply-and-solve in one submit counts as **both** +1 reply and +1 solved. A
 submit is only counted once its request returns HTTP 2xx, so cancelled or failed

@@ -66,6 +66,48 @@ export function deltaFromRequestBody(text) {
   return { replies, solved, activity };
 }
 
+/**
+ * Counting delta for a REST "create ticket" body (POST /api/v2/tickets.json).
+ * New tickets are created through the REST API, not the GraphQL mutation. The
+ * initial comment defaults to public (it emails the requester), so it counts as
+ * a public reply unless explicitly flagged internal (comment.public === false).
+ * @param {string} text
+ * @returns {{replies: number, solved: number, activity: boolean}}
+ */
+export function deltaFromTicketCreate(text) {
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return { replies: 0, solved: 0, activity: false };
+  }
+  const t = json && json.ticket;
+  if (!t || typeof t !== "object") return { replies: 0, solved: 0, activity: false };
+  const c = t.comment;
+  const hasComment = c && typeof c === "object";
+  const replies = hasComment && c.public !== false ? 1 : 0;
+  const solved =
+    typeof t.status === "string" && t.status.toLowerCase() === "solved" ? 1 : 0;
+  return { replies, solved, activity: true };
+}
+
+/**
+ * Route a captured request to the right parser by URL. Ticket updates
+ * (replies / solves / notes) go through GraphQL; new tickets go through the
+ * REST create endpoint.
+ * @param {string} url
+ * @param {string} method
+ * @param {string} body
+ * @returns {{replies: number, solved: number, activity: boolean}}
+ */
+export function deltaFromRequest(url, method, body) {
+  if (/\/api\/graphql/.test(url)) return deltaFromRequestBody(body);
+  if (method === "POST" && /\/api\/v2\/tickets\.json/.test(url)) {
+    return deltaFromTicketCreate(body);
+  }
+  return { replies: 0, solved: 0, activity: false };
+}
+
 // --- Time helpers -------------------------------------------------------------
 
 /** Local calendar date string (YYYY-MM-DD). */
