@@ -3,11 +3,12 @@
 // blocks, and reflects the selected metric on the badge.
 //
 // Detection is confirmed against captured HAR payloads:
-//   POST /api/graphql, operationName "UpdateTicketMutation" (ticket updates):
+//   POST /api/graphql, "UpdateTicketMutation" (updates) or
+//   "CreateIssueTicketMutation" (independent new tickets) — same ticket shape:
 //     variables.ticket.comment.isPublic === true  -> public reply
 //     variables.ticket.status === "SOLVED"         -> solved
-//     (any UpdateTicketMutation)                    -> activity -> productive block
-//   POST /api/v2/tickets.json (new ticket, REST create):
+//     (either mutation)                             -> activity -> productive block
+//   POST /api/v2/tickets.json (new ticket via side conversation, REST create):
 //     ticket.comment present & public !== false     -> public reply (default public)
 //     ticket.status === "solved"                    -> solved
 //     (any create)                                  -> activity -> productive block

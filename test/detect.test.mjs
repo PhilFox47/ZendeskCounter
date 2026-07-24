@@ -60,6 +60,19 @@ const internalNote = JSON.stringify({
 
 const unrelated = JSON.stringify({ operationName: "SomethingElse", variables: {} });
 
+// Independent new ticket, created-and-solved (CreateIssueTicketMutation) — same
+// shape as UpdateTicketMutation, faithful to the captured HAR.
+const createTicketSolved = JSON.stringify({
+  operationName: "CreateIssueTicketMutation",
+  variables: {
+    ticket: {
+      status: "SOLVED",
+      subject: "AW: DPD Paketklärungsinformation",
+      comment: { body: { value: "reply", format: "HTML" }, isPublic: true },
+    },
+  },
+});
+
 // --- Detection ---------------------------------------------------------------
 
 test("public reply, not solved -> reply + activity, no solve", () => {
@@ -84,6 +97,22 @@ test("internal note -> no reply/solve but IS activity (marks productive)", () =>
     solved: 0,
     activity: true,
   });
+});
+
+test("independent new ticket (CreateIssueTicketMutation) counts reply + solve", () => {
+  assert.deepEqual(deltaFromRequestBody(createTicketSolved), {
+    replies: 1,
+    solved: 1,
+    activity: true,
+  });
+});
+
+test("independent new ticket, public reply only (not solved)", () => {
+  const body = JSON.stringify({
+    operationName: "CreateIssueTicketMutation",
+    variables: { ticket: { status: "OPEN", comment: { isPublic: true } } },
+  });
+  assert.deepEqual(deltaFromRequestBody(body), { replies: 1, solved: 0, activity: true });
 });
 
 // --- New ticket (REST create) — faithful to captured POST /api/v2/tickets.json

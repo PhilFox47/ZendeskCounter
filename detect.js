@@ -3,6 +3,10 @@
 // against real captured GraphQL payloads (see test/detect.test.mjs).
 
 export const UPDATE_TICKET_OPERATION = "UpdateTicketMutation";
+export const CREATE_TICKET_OPERATION = "CreateIssueTicketMutation";
+// Both mutations carry the same ticket shape ({ comment.isPublic, status }),
+// so the same analyzer handles updates and independent new tickets.
+const TICKET_MUTATIONS = new Set([UPDATE_TICKET_OPERATION, CREATE_TICKET_OPERATION]);
 
 // 48 half-hour blocks per day. A block is "productive" if any ticket submit
 // happened in it. Targets are per productive hour.
@@ -57,7 +61,7 @@ export function deltaFromRequestBody(text) {
   let solved = 0;
   let activity = false;
   for (const op of ops) {
-    if (!op || op.operationName !== UPDATE_TICKET_OPERATION) continue;
+    if (!op || !TICKET_MUTATIONS.has(op.operationName)) continue;
     activity = true;
     const { isPublicReply, isSolved } = analyzeUpdateTicket(op.variables || {});
     if (isPublicReply) replies += 1;
