@@ -171,9 +171,11 @@ Your data lives only in this browser, so the popup's **Backup** row lets you mov
 it across versions or devices:
 
 - **Export** downloads a small `zendesk-productivity-YYYY-MM-DD.json` file
-  containing every recorded day and your targets. It's a plain, versioned,
-  self-describing JSON envelope (`{ app, schema, exportedAt, data }`) — no ticket
-  content, just the counts, 30-minute-block indices, and goals.
+  containing every recorded day, your targets, and per-day chat/call time. It's a
+  plain, versioned, self-describing JSON envelope
+  (`{ app, schema, exportedAt, data: { days, goals, away } }`) — no ticket
+  content, just the counts, 30-minute-block indices, goals, and chat/call seconds.
+  (Chat/call time also merges on import, taking the higher per-day value.)
 - **Import · replace** overwrites all current data with the file's data
   (including its targets). Use this to restore, or to seed a fresh install.
 - **Import · merge** combines the file into what you already have: non-overlapping

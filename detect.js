@@ -620,13 +620,13 @@ function sanitizeGoals(goals) {
  * @param {object} state
  * @returns {object}
  */
-export function serializeState(state, now = new Date()) {
+export function serializeState(state, now = new Date(), away) {
   const s = normalize(state);
   return {
     app: APP_ID,
     schema: SCHEMA_VERSION,
     exportedAt: now.toISOString(),
-    data: { days: s.days, goals: s.goals },
+    data: { days: s.days, goals: s.goals, away: normalizeAway(away || {}) },
   };
 }
 
@@ -655,7 +655,36 @@ export function parseImport(text) {
     days: sanitizeDays(payload.days),
     goals: sanitizeGoals(payload.goals),
   });
-  return { ok: true, state, dayCount: Object.keys(state.days).length };
+  const away = normalizeAway(payload.away); // chat/call time (absent in old exports)
+  return { ok: true, state, away, dayCount: Object.keys(state.days).length };
+}
+
+/**
+ * Merge two away maps. Consistent with mergeStates: overlapping days keep the
+ * higher chat/call totals and per-block max, so re-importing your own export
+ * won't double-count.
+ */
+export function mergeAway(base, incoming) {
+  const a = normalizeAway(base);
+  const b = normalizeAway(incoming);
+  const out = { ...a };
+  for (const [date, d] of Object.entries(b)) {
+    const cur = out[date];
+    if (!cur) {
+      out[date] = d;
+      continue;
+    }
+    const blockSec = { ...cur.blockSec };
+    for (const [idx, sec] of Object.entries(d.blockSec)) {
+      blockSec[idx] = Math.max(blockSec[idx] || 0, sec);
+    }
+    out[date] = {
+      chatSec: Math.max(cur.chatSec, d.chatSec),
+      callSec: Math.max(cur.callSec, d.callSec),
+      blockSec,
+    };
+  }
+  return normalizeAway(out);
 }
 
 /**
@@ -813,8 +842,21 @@ export function formatLogsForExport(logs, meta = {}) {
     meta.version ? `version: ${meta.version}` : null,
     meta.away ? `away today: chat ${meta.away.chatMin}m · call ${meta.away.callMin}m` : null,
     `entries: ${Array.isArray(logs) ? logs.length : 0}`,
-    "".padEnd(60, "-"),
   ].filter(Boolean);
+
+  // Per-day chat/call breakdown (newest first) when the full away map is given.
+  if (meta.awayByDay && typeof meta.awayByDay === "object") {
+    const dates = Object.keys(normalizeAway(meta.awayByDay)).sort((a, b) => (a < b ? 1 : -1));
+    if (dates.length) {
+      header.push("", "chat / call time per day:");
+      for (const d of dates) {
+        const a = awayForDate(meta.awayByDay, d);
+        header.push(`  ${d}: chat ${a.chatMin}m · call ${a.callMin}m · total ${a.totalMin}m`);
+      }
+    }
+  }
+  header.push("".padEnd(60, "-"));
+
   const lines = (Array.isArray(logs) ? logs : []).map((e) => {
     const ts = e.ts ? new Date(e.ts).toISOString() : "?";
     const detail = e.detail ? " " + (typeof e.detail === "string" ? e.detail : JSON.stringify(e.detail)) : "";

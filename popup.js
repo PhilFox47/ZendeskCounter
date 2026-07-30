@@ -8,6 +8,7 @@ import {
   serializeState,
   parseImport,
   mergeStates,
+  mergeAway,
   awayForDate,
   formatLogsForExport,
   DEFAULT_GOALS,
@@ -240,7 +241,8 @@ async function init() {
   // --- Export ---------------------------------------------------------------
   document.getElementById("exportBtn").addEventListener("click", async () => {
     const s = await getState();
-    const json = JSON.stringify(serializeState(s), null, 2);
+    const aw = await loadAway();
+    const json = JSON.stringify(serializeState(s, new Date(), aw), null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -266,13 +268,14 @@ async function init() {
   }
 
   document.getElementById("exportLogs").addEventListener("click", async () => {
-    const [logs, away] = await Promise.all([
+    const [logs, awayMap] = await Promise.all([
       new Promise((r) => chrome.storage.local.get(LOGS_KEY, (o) => r(o[LOGS_KEY] || []))),
-      new Promise((r) => chrome.storage.local.get(AWAY_KEY, (o) => r(o[AWAY_KEY]))),
+      loadAway(),
     ]);
     const text = formatLogsForExport(logs, {
       version: chrome.runtime.getManifest().version,
-      away: awayForDate(away, localDateKey()),
+      away: awayForDate(awayMap, localDateKey()),
+      awayByDay: awayMap,
     });
     download(`ticket-telemetry-logs-${localDateKey()}.txt`, text, "text/plain");
   });
@@ -313,32 +316,38 @@ async function init() {
     }
 
     state = await getState();
+    const curAway = await loadAway();
     let next;
+    let nextAway;
     if (importMode === "replace") {
       if (
         !confirm(
           `Replace ALL current data with ${res.dayCount} day(s) from the file? ` +
-            `This overwrites what you have now.`
+            `This overwrites what you have now (including chat/call time).`
         )
       ) {
         return;
       }
       next = res.state;
+      nextAway = res.away;
     } else {
       if (
         !confirm(
           `Merge ${res.dayCount} day(s) into your data? For overlapping days the ` +
-            `higher counts are kept and productive blocks are combined; your current ` +
-            `targets are unchanged.`
+            `higher counts (and chat/call time) are kept and productive blocks are ` +
+            `combined; your current targets are unchanged.`
         )
       ) {
         return;
       }
       next = mergeStates(state, res.state);
+      nextAway = mergeAway(curAway, res.away);
     }
 
     state = next;
+    away = nextAway || {};
     await setState(state);
+    await new Promise((r) => chrome.storage.local.set({ [AWAY_KEY]: away }, r));
     render(state);
     chrome.runtime.sendMessage({ type: "refreshAction" });
     alert("Import complete.");

@@ -755,3 +755,49 @@ test("weekAggregate deducts away across weekdays", async () => {
   assert.equal(w.productiveHours, 0.25); // 0.5h − 15min
   assert.equal(w.solvedPerHour, 8); // 2 / 0.25h
 });
+
+// --- Away time in export / import --------------------------------------------
+
+test("serializeState includes away, and export->import restores it", async () => {
+  const { serializeState, parseImport, addAway } = await import("../detect.js");
+  let s = normalize(undefined);
+  s = applyActivity(s, { replies: 4, solved: 2, activity: true }, new Date(2026, 6, 14, 9, 0));
+  let away = addAway({}, "2026-07-14", "call", 900, 18);
+  away = addAway(away, "2026-07-14", "chat", 300, 18);
+  const out = serializeState(s, new Date("2026-07-14T12:00:00Z"), away);
+  assert.deepEqual(out.data.away["2026-07-14"], { chatSec: 300, callSec: 900, blockSec: { 18: 1200 } });
+  const res = parseImport(JSON.stringify(out));
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.away["2026-07-14"], { chatSec: 300, callSec: 900, blockSec: { 18: 1200 } });
+});
+
+test("parseImport tolerates old exports with no away", async () => {
+  const { parseImport } = await import("../detect.js");
+  const oldExport = JSON.stringify({ app: "x", schema: 1, data: { days: {}, goals: {} } });
+  const res = parseImport(oldExport);
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.away, {}); // absent -> empty, no crash
+});
+
+test("mergeAway keeps the higher chat/call and unions blocks (no double-count)", async () => {
+  const { mergeAway, addAway } = await import("../detect.js");
+  let base = addAway({}, "2026-07-14", "call", 600, 18); // 10m
+  base = addAway(base, "2026-07-13", "chat", 300, 20); // other day
+  let inc = addAway({}, "2026-07-14", "call", 400, 18); // lower, same block -> max keeps 600
+  inc = addAway(inc, "2026-07-14", "chat", 120, 19); // new block
+  const m = mergeAway(base, inc);
+  assert.equal(m["2026-07-14"].callSec, 600); // max(600,400)
+  assert.equal(m["2026-07-14"].chatSec, 120); // max(0,120)
+  assert.deepEqual(m["2026-07-14"].blockSec, { 18: 600, 19: 120 });
+  assert.equal(m["2026-07-13"].chatSec, 300); // untouched day carried over
+});
+
+test("formatLogsForExport lists per-day chat/call when awayByDay is given", async () => {
+  const { formatLogsForExport, addAway } = await import("../detect.js");
+  let away = addAway({}, "2026-07-14", "chat", 300, 18);
+  away = addAway(away, "2026-07-13", "call", 600, 20);
+  const text = formatLogsForExport([], { awayByDay: away });
+  assert.match(text, /chat \/ call time per day:/);
+  assert.match(text, /2026-07-14: chat 5m · call 0m/);
+  assert.match(text, /2026-07-13: chat 0m · call 10m/);
+});
