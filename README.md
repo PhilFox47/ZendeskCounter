@@ -138,7 +138,9 @@ and reports a coarse status to the background worker, which times it.
   and the in-ticket call-controls bar becoming active.
 - Merged across tabs (**call > chat > idle**) and accumulated per day as chat/call
   seconds. A live **status indicator** in the popup shows the current state and
-  today's chat/call minutes.
+  today's chat/call minutes. The **dashboard** shows it too: a "Chat / call" card
+  in both the day and week summaries, plus a per-weekday chat/call note in the
+  week breakdown.
 
 **Troubleshooting logs.** Because the exact DOM states vary, the extension keeps a
 capped log of detections and state changes. The popup's **Diagnostics → Export

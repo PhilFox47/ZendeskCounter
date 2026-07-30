@@ -13,9 +13,11 @@ import {
   sortedWeeks,
   mondayOf,
   addDaysKey,
+  awayForDate,
 } from "./detect.js";
 
 const STORAGE_KEY = "counterState";
+const AWAY_KEY = "awayTime";
 
 function getState() {
   return new Promise((resolve) => {
@@ -58,11 +60,19 @@ function isLegacy(day) {
 
 let state = null;
 let goals = null;
+let away = {}; // { "YYYY-MM-DD": { chatSec, callSec } }
 let mode = "day"; // "day" | "week"
 let selectedDate = null;
 let selectedWeek = null;
 let dayList = []; // newest-first date keys
 let weekList = []; // newest-first Monday keys
+
+function getAway() {
+  return new Promise((r) => chrome.storage.local.get(AWAY_KEY, (o) => r(o[AWAY_KEY] || {})));
+}
+function fmtAway(min) {
+  return `${min}m`;
+}
 
 // --- Shared rendering --------------------------------------------------------
 
@@ -158,11 +168,13 @@ function renderDay() {
 
   const solvedColor = progressColor(m.solvedPerHour, goals.solvedPerHour);
   const repliesColor = progressColor(m.repliesPerHour, goals.repliesPerHour);
+  const a = awayForDate(away, selectedDate);
   document.getElementById("summary").innerHTML =
     card("Productive time", `${fmtHours(m.productiveHours)}h`, `${m.productiveBlocks} active blocks`) +
     card("Solved / hr", formatRate(m.solvedPerHour), `${m.solved} solved · target ${goals.solvedPerHour}`, solvedColor) +
     card("Replies / hr", formatRate(m.repliesPerHour), `${m.replies} replies · target ${goals.repliesPerHour}`, repliesColor) +
-    card("Peak solve rate", peakRate(day, "solved"), "best 30-min block");
+    card("Peak solve rate", peakRate(day, "solved"), "best 30-min block") +
+    card("Chat / call", `${fmtAway(a.chatMin)} / ${fmtAway(a.callMin)}`, `${fmtAway(a.totalMin)} away from tickets`);
 
   document.getElementById("legend").innerHTML = legendHTML();
   document.getElementById("solvedTgt").textContent = `target ${goals.solvedPerHour}/hr`;
@@ -237,11 +249,22 @@ function renderWeek() {
 
   const solvedColor = progressColor(week.solvedPerHour, goals.solvedPerHour);
   const repliesColor = progressColor(week.repliesPerHour, goals.repliesPerHour);
+  // Sum chat/call across the week's weekdays.
+  let wkChat = 0;
+  let wkCall = 0;
+  for (const d of week.days) {
+    const da = awayForDate(away, d.date);
+    wkChat += da.chatSec;
+    wkCall += da.callSec;
+  }
+  const wkChatMin = Math.round(wkChat / 60);
+  const wkCallMin = Math.round(wkCall / 60);
   document.getElementById("weekSummary").innerHTML =
     card("Productive time", `${fmtHours(week.productiveHours)}h`, `${week.productiveBlocks} active blocks`) +
     card("Solved / hr", formatRate(week.solvedPerHour), `${week.solved} solved · target ${goals.solvedPerHour}`, solvedColor) +
     card("Replies / hr", formatRate(week.repliesPerHour), `${week.replies} replies · target ${goals.repliesPerHour}`, repliesColor) +
-    card("Days worked", `${week.worked}/5`, "weekdays with activity");
+    card("Days worked", `${week.worked}/5`, "weekdays with activity") +
+    card("Chat / call", `${fmtAway(wkChatMin)} / ${fmtAway(wkCallMin)}`, `${fmtAway(wkChatMin + wkCallMin)} away this week`);
 
   // Mon–Fri breakdown rows
   const wd = document.getElementById("weekDays");
@@ -253,7 +276,9 @@ function renderWeek() {
     row.className = "recent-day week-day" + (d.date === selectedDate ? " active" : "");
     row.addEventListener("click", () => { switchMode("day"); selectPeriod(d.date); });
 
-    row.innerHTML = `<div class="rd-date">${d.weekday}<small>${sd.monthDay}${worked ? " · " + fmtHours(d.metrics.productiveHours) + "h" : ""}</small></div>`;
+    const da = awayForDate(away, d.date);
+    const awayNote = da.totalSec > 0 ? ` · ${fmtAway(da.totalMin)} chat/call` : "";
+    row.innerHTML = `<div class="rd-date">${d.weekday}<small>${sd.monthDay}${worked ? " · " + fmtHours(d.metrics.productiveHours) + "h" : ""}${awayNote}</small></div>`;
     const tracks = document.createElement("div");
     tracks.className = "recent-tracks";
     const t1 = document.createElement("div"); t1.className = "mini-track";
@@ -356,6 +381,7 @@ function recomputeLists() {
 async function init() {
   state = await getState();
   goals = state.goals;
+  away = await getAway();
   recomputeLists();
 
   if (dayList.length === 0) {
@@ -375,13 +401,18 @@ async function init() {
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local" || !changes[STORAGE_KEY]) return;
-    state = normalize(changes[STORAGE_KEY].newValue);
-    goals = state.goals;
-    recomputeLists();
+    if (area !== "local") return;
+    if (changes[AWAY_KEY]) away = changes[AWAY_KEY].newValue || {};
+    if (changes[STORAGE_KEY]) {
+      state = normalize(changes[STORAGE_KEY].newValue);
+      goals = state.goals;
+      recomputeLists();
+    }
     if (dayList.length === 0) return;
-    populateSelect();
-    render();
+    if (changes[STORAGE_KEY] || changes[AWAY_KEY]) {
+      populateSelect();
+      render();
+    }
   });
 }
 
