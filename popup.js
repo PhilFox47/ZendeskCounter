@@ -18,10 +18,18 @@ const AWAY_KEY = "awayTime";
 const PRESENCE_KEY = "presenceState";
 const LOGS_KEY = "ptLogs";
 
+let away = {}; // { "YYYY-MM-DD": { chatSec, callSec, blockSec } }
+
 function getState() {
   return new Promise((resolve) => {
     chrome.storage.local.get(STORAGE_KEY, (res) => resolve(normalize(res[STORAGE_KEY])));
   });
+}
+
+function loadAway() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get(AWAY_KEY, (res) => resolve(res[AWAY_KEY] || {}))
+  );
 }
 
 function setState(state) {
@@ -58,12 +66,18 @@ function applyRate(prefix, value, goal) {
 function render(state) {
   const s = normalize(state);
   const goals = s.goals || DEFAULT_GOALS;
-  const today = metricsForDate(s);
+  const today = metricsForDate(s, localDateKey(), away);
 
   document.getElementById("prodHours").textContent = fmt1(today.productiveHours);
   document.getElementById("prodBlocks").textContent = today.productiveBlocks;
   document.getElementById("todayReplies").textContent = today.replies;
   document.getElementById("todaySolved").textContent = today.solved;
+  // Show the chat/call deduction under the productive-hours card when present.
+  const dedMin = Math.round((today.deductedSec || 0) / 60);
+  const prodLabel = document.getElementById("prodHoursLabel");
+  if (prodLabel) {
+    prodLabel.textContent = dedMin > 0 ? `Productive hours (−${dedMin}m)` : "Productive hours";
+  }
 
   document.getElementById("goalReplies").textContent = `target ${goals.repliesPerHour}`;
   document.getElementById("goalSolved").textContent = `target ${goals.solvedPerHour}`;
@@ -74,7 +88,7 @@ function render(state) {
   document.getElementById("goalSolvedInput").value = goals.solvedPerHour;
 
   // History table
-  const rows = sortedDays(s);
+  const rows = sortedDays(s, away);
   const body = document.getElementById("historyBody");
   const empty = document.getElementById("historyEmpty");
   body.innerHTML = "";
@@ -131,10 +145,11 @@ function fmtDuration(sec) {
 
 // Live presence indicator (auto-detected chat / call).
 async function renderPresence() {
-  const [pres, away] = await Promise.all([
+  const [pres, freshAway] = await Promise.all([
     new Promise((r) => chrome.storage.local.get(PRESENCE_KEY, (o) => r(o[PRESENCE_KEY]))),
-    new Promise((r) => chrome.storage.local.get(AWAY_KEY, (o) => r(o[AWAY_KEY]))),
+    loadAway(),
   ]);
+  away = freshAway; // keep the module copy fresh for render()
   const box = document.getElementById("presenceBox");
   const title = document.getElementById("prTitle");
   const sub = document.getElementById("prSub");
@@ -172,6 +187,7 @@ async function renderPresence() {
 
 async function init() {
   let state = await getState();
+  away = await loadAway();
   render(state);
   renderPresence();
 
@@ -182,10 +198,11 @@ async function init() {
   }, 5000);
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes[STORAGE_KEY]) {
-      state = normalize(changes[STORAGE_KEY].newValue);
-      render(state);
-    }
+    if (changes[AWAY_KEY]) away = changes[AWAY_KEY].newValue || {};
+    if (changes[STORAGE_KEY]) state = normalize(changes[STORAGE_KEY].newValue);
+    // Away changes affect the deducted productive time / rates too, so re-render
+    // the stats on either.
+    if (changes[STORAGE_KEY] || changes[AWAY_KEY]) render(state);
     if (changes[PRESENCE_KEY] || changes[AWAY_KEY]) renderPresence();
   });
 

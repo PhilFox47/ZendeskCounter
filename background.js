@@ -29,6 +29,7 @@ import {
   presenceKind,
   appendLog,
   localDateKey,
+  blockIndex,
   ACCRUE_CAP_SEC,
 } from "./detect.js";
 import { makeIcons } from "./icon.js";
@@ -78,9 +79,11 @@ function decodeRequestBody(requestBody) {
 
 // Draw today's solved/hr (top) and replies/hr (bottom) onto the toolbar icon,
 // and keep the hover tooltip as the detailed breakdown. No badge number.
+// Rates are over productive time with chat/call time deducted.
 async function updateAction(state) {
   const s = normalize(state);
-  const rates = todayRates(s);
+  const away = (await get(AWAY_KEY)) || {};
+  const rates = todayRates(s, localDateKey(), away);
   await chrome.action.setIcon({
     imageData: makeIcons({
       solvedRate: rates.solvedRate,
@@ -90,10 +93,14 @@ async function updateAction(state) {
     }),
   });
 
-  const m = metricsForDate(s);
+  const m = metricsForDate(s, localDateKey(), away);
+  const deductedMin = Math.round(m.deductedSec / 60);
+  const prodLine =
+    `Zendesk today — ${formatRate(m.productiveHours)}h productive` +
+    (deductedMin > 0 ? ` (−${deductedMin}m chat/call)` : "");
   await chrome.action.setTitle({
     title:
-      `Zendesk today — ${formatRate(m.productiveHours)}h productive\n` +
+      `${prodLine}\n` +
       `Solved ${formatRate(m.solvedPerHour)}/h (${m.solved}) · ` +
       `Replies ${formatRate(m.repliesPerHour)}/h (${m.replies})`,
   });
@@ -154,8 +161,9 @@ chrome.runtime.onStartup.addListener(refreshAction);
 chrome.runtime.onInstalled.addListener(refreshAction);
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes[STORAGE_KEY]) {
-    updateAction(normalize(changes[STORAGE_KEY].newValue));
+  // Refresh the icon on ticket changes and on away-time changes (deduction).
+  if (area === "local" && (changes[STORAGE_KEY] || changes[AWAY_KEY])) {
+    refreshAction();
   }
 });
 
@@ -220,7 +228,8 @@ async function accrueAndUpdate(logChange) {
   const kind = presenceKind(prevState);
   if (kind && deltaSec > 0) {
     const away = normalizeAway((await get(AWAY_KEY)) || {});
-    await set({ [AWAY_KEY]: addAway(away, localDateKey(new Date(now)), kind, deltaSec) });
+    const when = new Date(now);
+    await set({ [AWAY_KEY]: addAway(away, localDateKey(when), kind, deltaSec, blockIndex(when)) });
   }
 
   const changed = merged !== prevState;

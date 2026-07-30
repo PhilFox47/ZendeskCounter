@@ -246,25 +246,39 @@ export function applyActivity(state, delta, when = new Date()) {
 
 // --- Derived metrics ----------------------------------------------------------
 
-/** Per-day metrics including productive time and per-productive-hour rates. */
-export function dayMetrics(day) {
+/**
+ * Per-day metrics including productive time and per-productive-hour rates.
+ * When `awayDay` (that date's entry from the awayTime store) is given, chat/call
+ * seconds that fall *within productive blocks* are deducted from productive time,
+ * so rates reflect only ticket-available time. Time on calls/chats outside your
+ * ticket blocks isn't deducted (there was no productive time there to remove).
+ */
+export function dayMetrics(day, awayDay) {
   const d = { ...emptyDay(), ...(day || {}) };
   const productiveBlocks = d.blocks.length;
-  const productiveHours = productiveBlocks * 0.5;
+  const rawProductiveHours = productiveBlocks * 0.5;
+
+  let deductedSec = 0;
+  for (const idx of d.blocks) deductedSec += awayBlockSec(awayDay, idx);
+  const productiveHours = Math.max(0, rawProductiveHours - deductedSec / 3600);
+
   return {
     replies: d.replies,
     solved: d.solved,
     productiveBlocks,
+    rawProductiveHours,
+    deductedSec,
     productiveHours,
     repliesPerHour: productiveHours ? d.replies / productiveHours : 0,
     solvedPerHour: productiveHours ? d.solved / productiveHours : 0,
   };
 }
 
-/** Metrics for a given date key (today by default). */
-export function metricsForDate(state, dateKey = localDateKey()) {
+/** Metrics for a given date key (today by default), optionally away-adjusted. */
+export function metricsForDate(state, dateKey = localDateKey(), away) {
   const s = normalize(state);
-  return dayMetrics(s.days[dateKey] || emptyDay());
+  const awayDay = away ? normalizeAway(away)[dateKey] : undefined;
+  return dayMetrics(s.days[dateKey] || emptyDay(), awayDay);
 }
 
 /** All-time totals aggregated across every recorded day. */
@@ -289,12 +303,13 @@ export function totals(state) {
   };
 }
 
-/** Days sorted newest-first, each with its date key and metrics. */
-export function sortedDays(state) {
+/** Days sorted newest-first, each with its date key and metrics (away-adjusted). */
+export function sortedDays(state, away) {
   const s = normalize(state);
+  const aw = away ? normalizeAway(away) : null;
   return Object.keys(s.days)
     .sort((a, b) => (a < b ? 1 : -1))
-    .map((date) => ({ date, ...dayMetrics(s.days[date]) }));
+    .map((date) => ({ date, ...dayMetrics(s.days[date], aw ? aw[date] : undefined) }));
 }
 
 // --- Weeks (Monday–Friday work weeks) ----------------------------------------
@@ -336,27 +351,29 @@ export function weekdayKeys(mondayKey) {
  * @param {object} state
  * @param {string} mondayKey
  */
-export function weekAggregate(state, mondayKey) {
+export function weekAggregate(state, mondayKey, away) {
   const s = normalize(state);
+  const aw = away ? normalizeAway(away) : null;
   const keys = weekdayKeys(mondayKey);
   const days = keys.map((date, i) => ({
     date,
     weekday: WEEKDAY_LABELS[i],
     present: !!s.days[date],
-    metrics: dayMetrics(s.days[date] || emptyDay()),
+    metrics: dayMetrics(s.days[date] || emptyDay(), aw ? aw[date] : undefined),
     day: s.days[date] || emptyDay(),
   }));
   let replies = 0;
   let solved = 0;
   let productiveBlocks = 0;
+  let productiveHours = 0;
   let worked = 0;
   for (const d of days) {
     replies += d.metrics.replies;
     solved += d.metrics.solved;
     productiveBlocks += d.metrics.productiveBlocks;
+    productiveHours += d.metrics.productiveHours; // already away-adjusted per day
     if (d.metrics.productiveBlocks > 0) worked += 1;
   }
-  const productiveHours = productiveBlocks * 0.5;
   return {
     monday: mondayKey,
     friday: keys[4],
@@ -434,9 +451,9 @@ export function formatIconRate(n) {
  * @param {string} dateKey
  * @returns {{solvedRate:number, repliesRate:number, solvedOnTarget:boolean, repliesOnTarget:boolean, productiveHours:number}}
  */
-export function todayRates(state, dateKey = localDateKey()) {
+export function todayRates(state, dateKey = localDateKey(), away) {
   const s = normalize(state);
-  const m = metricsForDate(s, dateKey);
+  const m = metricsForDate(s, dateKey, away);
   const g = s.goals;
   return {
     solvedRate: m.solvedPerHour,
@@ -693,7 +710,20 @@ export const LOG_CAP = 800;
 export const ACCRUE_CAP_SEC = 45;
 
 export function emptyAway() {
-  return {}; // { "YYYY-MM-DD": { chatSec, callSec } }
+  return {}; // { "YYYY-MM-DD": { chatSec, callSec, blockSec: { idx: sec } } }
+}
+
+// Clean a per-block away-seconds map ({ "<idx>": seconds }).
+function cleanBlockSec(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, v] of Object.entries(raw)) {
+    const idx = Number(k);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= BLOCKS_PER_DAY) continue;
+    const sec = Math.max(0, Math.floor(Number(v) || 0));
+    if (sec > 0) out[idx] = sec;
+  }
+  return out;
 }
 
 export function normalizeAway(obj) {
@@ -704,22 +734,38 @@ export function normalizeAway(obj) {
     out[k] = {
       chatSec: Math.max(0, Math.floor(Number(v.chatSec) || 0)),
       callSec: Math.max(0, Math.floor(Number(v.callSec) || 0)),
+      blockSec: cleanBlockSec(v.blockSec),
     };
   }
   return out;
 }
 
-/** Add `seconds` of chat/call time to a day, returning a new away map. */
-export function addAway(away, dateKey, kind, seconds, todayKey = dateKey) {
+/**
+ * Add `seconds` of chat/call time to a day, returning a new away map. When a
+ * `blockIdx` is given, the seconds are also attributed to that 30-min block so
+ * they can be deducted precisely from that block's productive time.
+ */
+export function addAway(away, dateKey, kind, seconds, blockIdx) {
   const next = normalizeAway(away);
   const sec = Math.max(0, Math.floor(Number(seconds) || 0));
   if (!sec || (kind !== "chat" && kind !== "call")) return next;
-  const day = next[dateKey] || { chatSec: 0, callSec: 0 };
+  const day = next[dateKey] || { chatSec: 0, callSec: 0, blockSec: {} };
+  const blockSec = { ...day.blockSec };
+  if (Number.isInteger(blockIdx) && blockIdx >= 0 && blockIdx < BLOCKS_PER_DAY) {
+    blockSec[blockIdx] = (blockSec[blockIdx] || 0) + sec;
+  }
   next[dateKey] = {
     chatSec: day.chatSec + (kind === "chat" ? sec : 0),
     callSec: day.callSec + (kind === "call" ? sec : 0),
+    blockSec,
   };
   return next;
+}
+
+/** Away seconds recorded within a single block (capped at the 30-min block). */
+export function awayBlockSec(awayDay, idx) {
+  const bs = awayDay && awayDay.blockSec ? awayDay.blockSec[idx] : 0;
+  return Math.min(1800, Math.max(0, Number(bs) || 0));
 }
 
 /** Away totals for a date, plus a rounded-minutes convenience. */

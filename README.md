@@ -148,12 +148,22 @@ logs** saves them (with the raw signals — tab statuses, colors, Talk state) to
 text file you can share, and **Clear logs** resets it. This is how the green /
 on-call thresholds get calibrated if something is mis-detected.
 
-> Status: this is the **detection/verification** phase. Chat/phone time is
-> tracked and shown, but **not yet subtracted from productive time / rates** —
-> that deduction is the planned next step once detection is confirmed accurate
-> against real logs. (Network detection isn't possible here: chat runs over a
-> WebSocket and Talk over WebRTC, neither readable by the extension — hence the
-> DOM approach.)
+### Deducted from productive time
+
+Chat/call time is **deducted from productive time**, so your solved/hr and
+replies/hr are measured over ticket-available time. The deduction is **per
+block**: only chat/call seconds that fall *within a productive 30-minute block*
+are removed (a block's productive portion = 30 min − chat/call in that block,
+floored at 0). Time on a call during a block where you did *no* ticket work isn't
+subtracted — there was no productive time there to remove — so the rate can't be
+distorted by out-of-band calls. The deduction flows through everywhere: the
+toolbar icon rates, the popup ("Productive hours (−Nm)" and the By-day table), and
+the dashboard day/week summaries.
+
+> Detection note: the green-bubble / on-call thresholds are still heuristics that
+> may need calibration — use the exported logs above if something is mis-detected.
+> (Network detection isn't possible here: chat runs over a WebSocket and Talk over
+> WebRTC, neither readable by the extension — hence the DOM approach.)
 
 ## Backup: export & import
 

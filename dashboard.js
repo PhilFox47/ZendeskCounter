@@ -162,15 +162,17 @@ function renderAxis() {
 
 function renderDay() {
   const day = state.days[selectedDate];
-  const m = metricsForDate(state, selectedDate);
+  const m = metricsForDate(state, selectedDate, away);
   const legacy = isLegacy(day);
   const series = blockSeries(day);
 
   const solvedColor = progressColor(m.solvedPerHour, goals.solvedPerHour);
   const repliesColor = progressColor(m.repliesPerHour, goals.repliesPerHour);
   const a = awayForDate(away, selectedDate);
+  const dedMin = Math.round((m.deductedSec || 0) / 60);
+  const prodSub = `${m.productiveBlocks} active blocks` + (dedMin > 0 ? ` · −${dedMin}m chat/call` : "");
   document.getElementById("summary").innerHTML =
-    card("Productive time", `${fmtHours(m.productiveHours)}h`, `${m.productiveBlocks} active blocks`) +
+    card("Productive time", `${fmtHours(m.productiveHours)}h`, prodSub) +
     card("Solved / hr", formatRate(m.solvedPerHour), `${m.solved} solved · target ${goals.solvedPerHour}`, solvedColor) +
     card("Replies / hr", formatRate(m.repliesPerHour), `${m.replies} replies · target ${goals.repliesPerHour}`, repliesColor) +
     card("Peak solve rate", peakRate(day, "solved"), "best 30-min block") +
@@ -188,7 +190,7 @@ function renderDay() {
   el.innerHTML = "";
   for (const date of dayList.slice(0, 14)) {
     const d = state.days[date];
-    const dm = metricsForDate(state, date);
+    const dm = metricsForDate(state, date, away);
     const sd = shortDate(date);
     const row = document.createElement("div");
     row.className = "recent-day" + (date === selectedDate ? " active" : "");
@@ -243,7 +245,7 @@ function renderWeek() {
     return;
   }
 
-  const week = weekAggregate(state, selectedWeek);
+  const week = weekAggregate(state, selectedWeek, away);
   document.getElementById("weekRange").textContent = weekRangeLabel(selectedWeek);
   document.getElementById("weekLegend").innerHTML = legendHTML();
 
@@ -298,7 +300,7 @@ function renderWeek() {
   const rw = document.getElementById("recentWeeks");
   rw.innerHTML = "";
   for (const monday of weekList.slice(0, 10)) {
-    const w = weekAggregate(state, monday);
+    const w = weekAggregate(state, monday, away);
     const row = document.createElement("div");
     row.className = "recent-day" + (monday === selectedWeek ? " active" : "");
     row.addEventListener("click", () => selectPeriod(monday));

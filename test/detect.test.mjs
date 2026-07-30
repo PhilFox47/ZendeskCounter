@@ -670,7 +670,7 @@ test("normalizeAway drops bad keys and clamps values", async () => {
     "2026-07-15": "x",
   });
   assert.deepEqual(Object.keys(out), ["2026-07-14"]);
-  assert.deepEqual(out["2026-07-14"], { chatSec: 10, callSec: 0 });
+  assert.deepEqual(out["2026-07-14"], { chatSec: 10, callSec: 0, blockSec: {} });
 });
 
 test("appendLog keeps a capped ring buffer (oldest dropped)", async () => {
@@ -692,4 +692,66 @@ test("formatLogsForExport renders a readable header + lines", async () => {
   assert.match(text, /away today: chat 2m · call 5m/);
   assert.match(text, /presence: idle -> call/);
   assert.match(text, /\{"tabs":1\}/);
+});
+
+// --- Chat/call deduction from productive time --------------------------------
+
+test("addAway records per-block seconds; awayBlockSec caps at 30 min", async () => {
+  const { addAway, awayBlockSec, normalizeAway } = await import("../detect.js");
+  let a = addAway({}, "2026-07-14", "call", 600, 22); // 10 min in block 22
+  a = addAway(a, "2026-07-14", "chat", 300, 22); // +5 min in block 22
+  a = addAway(a, "2026-07-14", "call", 3000, 30); // 50 min -> capped to 30 by awayBlockSec
+  const day = normalizeAway(a)["2026-07-14"];
+  assert.equal(day.blockSec[22], 900); // 15 min stored
+  assert.equal(awayBlockSec(day, 22), 900);
+  assert.equal(day.blockSec[30], 3000); // stored raw
+  assert.equal(awayBlockSec(day, 30), 1800); // but capped at the 30-min block
+});
+
+test("dayMetrics deducts chat/call time within productive blocks only", async () => {
+  const { dayMetrics, normalizeAway } = await import("../detect.js");
+  // Two productive blocks (22, 23) = 1.0h raw; 6 solved, 14 replies.
+  const day = {
+    replies: 14, solved: 6, blocks: [22, 23],
+    blockStats: { 22: { replies: 7, solved: 3 }, 23: { replies: 7, solved: 3 } },
+  };
+  // 15 min call in block 22 (productive) + 20 min call in block 40 (NOT productive).
+  let away = {};
+  const { addAway } = await import("../detect.js");
+  away = addAway(away, "2026-07-14", "call", 900, 22);
+  away = addAway(away, "2026-07-14", "call", 1200, 40);
+  const awayDay = normalizeAway(away)["2026-07-14"];
+
+  const raw = dayMetrics(day); // no away -> unchanged
+  assert.equal(raw.productiveHours, 1);
+  assert.equal(raw.solvedPerHour, 6);
+
+  const adj = dayMetrics(day, awayDay);
+  assert.equal(adj.rawProductiveHours, 1);
+  assert.equal(adj.deductedSec, 900); // only the in-block-22 call; block 40 not productive
+  assert.equal(adj.productiveHours, 0.75); // 1h − 15min
+  assert.equal(adj.solvedPerHour, 8); // 6 / 0.75h
+  assert.equal(Math.round(adj.repliesPerHour * 100) / 100, 18.67); // 14 / 0.75h
+});
+
+test("metricsForDate applies away when provided", async () => {
+  const { metricsForDate, addAway } = await import("../detect.js");
+  let s = normalize(undefined);
+  s = applyActivity(s, { replies: 3, solved: 3, activity: true }, new Date(2026, 6, 14, 11, 5)); // block 22, 0.5h
+  const away = addAway({}, "2026-07-14", "call", 900, 22); // 15 min of the 30
+  const m = metricsForDate(s, "2026-07-14", away);
+  assert.equal(m.productiveHours, 0.25); // 0.5h − 15min
+  assert.equal(m.solvedPerHour, 12); // 3 / 0.25h
+  // without away -> raw
+  assert.equal(metricsForDate(s, "2026-07-14").productiveHours, 0.5);
+});
+
+test("weekAggregate deducts away across weekdays", async () => {
+  const { weekAggregate, addAway } = await import("../detect.js");
+  let s = normalize(undefined);
+  s = applyActivity(s, { replies: 4, solved: 2, activity: true }, new Date(2026, 6, 14, 9, 0)); // Tue block 18, 0.5h
+  let away = addAway({}, "2026-07-14", "chat", 900, 18); // 15 min in that block
+  const w = weekAggregate(s, "2026-07-13", away);
+  assert.equal(w.productiveHours, 0.25); // 0.5h − 15min
+  assert.equal(w.solvedPerHour, 8); // 2 / 0.25h
 });
