@@ -125,6 +125,34 @@ The dashboard reads the same local data — no network, nothing new stored.
 > imported from an older export) still show *when* you were active, just without
 > the per-block breakdown (those blocks render neutral grey).
 
+## Active chat / phone time (auto-detected)
+
+Time spent in a live chat or on a call is *not* ticket-handling time, so the
+extension auto-detects it via a **content script** on the Zendesk agent workspace
+(`*://*.zendesk.com/agent/*`). It reads only page state — never ticket content —
+and reports a coarse status to the background worker, which times it.
+
+- **Active chat** — detected when a ticket tab shows a **green status bubble**
+  (`[data-test-id="header-tab"]` with a green `avatars.status_indicator`).
+- **On a call** — detected from Zendesk Talk: the `talk-top-nav-control-*` state
+  and the in-ticket call-controls bar becoming active.
+- Merged across tabs (**call > chat > idle**) and accumulated per day as chat/call
+  seconds. A live **status indicator** in the popup shows the current state and
+  today's chat/call minutes.
+
+**Troubleshooting logs.** Because the exact DOM states vary, the extension keeps a
+capped log of detections and state changes. The popup's **Diagnostics → Export
+logs** saves them (with the raw signals — tab statuses, colors, Talk state) to a
+text file you can share, and **Clear logs** resets it. This is how the green /
+on-call thresholds get calibrated if something is mis-detected.
+
+> Status: this is the **detection/verification** phase. Chat/phone time is
+> tracked and shown, but **not yet subtracted from productive time / rates** —
+> that deduction is the planned next step once detection is confirmed accurate
+> against real logs. (Network detection isn't possible here: chat runs over a
+> WebSocket and Talk over WebRTC, neither readable by the extension — hence the
+> DOM approach.)
+
 ## Backup: export & import
 
 Your data lives only in this browser, so the popup's **Backup** row lets you move

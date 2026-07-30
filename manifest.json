@@ -1,14 +1,21 @@
 {
   "manifest_version": 3,
   "name": "Ticket Telemetry",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "description": "Tracks your Zendesk solved/hr and replies/hr per 30-minute block — shown on the toolbar icon and a full timeline dashboard.",
-  "permissions": ["webRequest", "storage"],
+  "permissions": ["webRequest", "storage", "alarms"],
   "host_permissions": ["*://*.zendesk.com/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["*://*.zendesk.com/agent/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "options_ui": {
     "page": "dashboard.html",
     "open_in_tab": true

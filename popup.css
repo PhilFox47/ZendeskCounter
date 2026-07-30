@@ -78,6 +78,19 @@ h1 {
 .slotnow.wait .slot-title { color: var(--bad); }
 .slotnow.wait { border-color: var(--bad); }
 
+/* Presence indicator (auto-detected chat / call) */
+.presence { margin-top: -8px; }
+.presence.idle .slot-dot { background: var(--muted); }
+.presence.idle .slot-title { color: var(--muted); }
+.presence.chat .slot-dot { background: var(--good); }
+.presence.chat .slot-title { color: var(--good); }
+.presence.chat { border-color: var(--good); }
+.presence.call .slot-dot { background: var(--bad); }
+.presence.call .slot-title { color: var(--bad); }
+.presence.call { border-color: var(--bad); }
+.presence.stale .slot-dot { background: var(--border); }
+.presence.stale .slot-title { color: var(--muted); }
+
 h2 {
   font-size: 11px;
   text-transform: uppercase;

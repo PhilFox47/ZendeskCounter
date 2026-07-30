@@ -17,6 +17,14 @@
       </span>
     </section>
 
+    <section class="slotnow presence" id="presenceBox">
+      <span class="slot-dot" id="prDot"></span>
+      <span class="slot-text">
+        <span class="slot-title" id="prTitle">Detecting…</span>
+        <span class="slot-sub" id="prSub"></span>
+      </span>
+    </section>
+
     <section class="group">
       <h2>Today</h2>
       <div class="cards">
@@ -92,6 +100,13 @@
         </div>
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden />
+      <div class="row data">
+        <label>Diagnostics</label>
+        <div class="data-buttons">
+          <button id="exportLogs" class="ghost">Export logs</button>
+          <button id="clearLogs" class="ghost">Clear logs</button>
+        </div>
+      </div>
     </section>
 
     <div class="actions">

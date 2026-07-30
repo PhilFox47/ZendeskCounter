@@ -678,3 +678,101 @@ export function mergeStates(base, incoming) {
   }
   return normalize({ days, goals: a.goals });
 }
+
+// --- Presence: active chat / phone time (auto-detected) ----------------------
+//
+// Kept in a separate storage structure from `counterState` so it never disturbs
+// the reply/solve/block metrics. `awayTime` accumulates seconds spent in chats
+// and calls per local day; `presenceState` holds the current live status; logs
+// are a capped ring buffer for troubleshooting detection.
+
+export const PRESENCE_STATES = ["idle", "chat", "call"];
+export const LOG_CAP = 800;
+// Don't attribute more than this to a single accrual step — guards against
+// counting through a suspended service worker / sleep.
+export const ACCRUE_CAP_SEC = 45;
+
+export function emptyAway() {
+  return {}; // { "YYYY-MM-DD": { chatSec, callSec } }
+}
+
+export function normalizeAway(obj) {
+  const out = {};
+  if (!obj || typeof obj !== "object") return out;
+  for (const [k, v] of Object.entries(obj)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !v || typeof v !== "object") continue;
+    out[k] = {
+      chatSec: Math.max(0, Math.floor(Number(v.chatSec) || 0)),
+      callSec: Math.max(0, Math.floor(Number(v.callSec) || 0)),
+    };
+  }
+  return out;
+}
+
+/** Add `seconds` of chat/call time to a day, returning a new away map. */
+export function addAway(away, dateKey, kind, seconds, todayKey = dateKey) {
+  const next = normalizeAway(away);
+  const sec = Math.max(0, Math.floor(Number(seconds) || 0));
+  if (!sec || (kind !== "chat" && kind !== "call")) return next;
+  const day = next[dateKey] || { chatSec: 0, callSec: 0 };
+  next[dateKey] = {
+    chatSec: day.chatSec + (kind === "chat" ? sec : 0),
+    callSec: day.callSec + (kind === "call" ? sec : 0),
+  };
+  return next;
+}
+
+/** Away totals for a date, plus a rounded-minutes convenience. */
+export function awayForDate(away, dateKey = localDateKey()) {
+  const a = normalizeAway(away)[dateKey] || { chatSec: 0, callSec: 0 };
+  return {
+    chatSec: a.chatSec,
+    callSec: a.callSec,
+    totalSec: a.chatSec + a.callSec,
+    chatMin: Math.round(a.chatSec / 60),
+    callMin: Math.round(a.callSec / 60),
+    totalMin: Math.round((a.chatSec + a.callSec) / 60),
+  };
+}
+
+/** Merge many per-tab presence states into one: call > chat > idle. */
+export function mergePresence(states) {
+  let sawChat = false;
+  for (const s of states) {
+    if (s === "call") return "call";
+    if (s === "chat") sawChat = true;
+  }
+  return sawChat ? "chat" : "idle";
+}
+
+/** Which away bucket a merged presence state accrues to (or null for idle). */
+export function presenceKind(state) {
+  if (state === "call") return "call";
+  if (state === "chat") return "chat";
+  return null;
+}
+
+/** Append a log entry to a capped ring buffer, returning a new array. */
+export function appendLog(logs, entry, cap = LOG_CAP) {
+  const arr = Array.isArray(logs) ? logs.slice() : [];
+  arr.push(entry);
+  return arr.length > cap ? arr.slice(arr.length - cap) : arr;
+}
+
+/** Render logs (and optional away summary) as plain text for export. */
+export function formatLogsForExport(logs, meta = {}) {
+  const header = [
+    `Ticket Telemetry — presence log export`,
+    `generated: ${new Date().toISOString()}`,
+    meta.version ? `version: ${meta.version}` : null,
+    meta.away ? `away today: chat ${meta.away.chatMin}m · call ${meta.away.callMin}m` : null,
+    `entries: ${Array.isArray(logs) ? logs.length : 0}`,
+    "".padEnd(60, "-"),
+  ].filter(Boolean);
+  const lines = (Array.isArray(logs) ? logs : []).map((e) => {
+    const ts = e.ts ? new Date(e.ts).toISOString() : "?";
+    const detail = e.detail ? " " + (typeof e.detail === "string" ? e.detail : JSON.stringify(e.detail)) : "";
+    return `${ts} [${e.level || "info"}] ${e.msg || ""}${detail}`;
+  });
+  return header.concat(lines).join("\n") + "\n";
+}

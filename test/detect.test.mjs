@@ -620,3 +620,76 @@ test("isBonusRate: rainbow tier is strictly above 333% of goal", () => {
   assert.equal(isBonusRate(2.9, 3), false); // below target
   assert.equal(isBonusRate(5, 0), false); // zero goal never rainbows (guarded)
 });
+
+// --- Presence: chat/call time tracking ---------------------------------------
+
+test("mergePresence prioritizes call > chat > idle", async () => {
+  const { mergePresence } = await import("../detect.js");
+  assert.equal(mergePresence(["idle", "chat", "call"]), "call");
+  assert.equal(mergePresence(["idle", "chat", "idle"]), "chat");
+  assert.equal(mergePresence(["idle", "idle"]), "idle");
+  assert.equal(mergePresence([]), "idle");
+});
+
+test("presenceKind maps to away bucket", async () => {
+  const { presenceKind } = await import("../detect.js");
+  assert.equal(presenceKind("call"), "call");
+  assert.equal(presenceKind("chat"), "chat");
+  assert.equal(presenceKind("idle"), null);
+});
+
+test("addAway accumulates chat/call seconds per day", async () => {
+  const { addAway, awayForDate } = await import("../detect.js");
+  let away = {};
+  away = addAway(away, "2026-07-14", "chat", 90);
+  away = addAway(away, "2026-07-14", "call", 120);
+  away = addAway(away, "2026-07-14", "chat", 30);
+  const a = awayForDate(away, "2026-07-14");
+  assert.equal(a.chatSec, 120);
+  assert.equal(a.callSec, 120);
+  assert.equal(a.totalSec, 240);
+  assert.equal(a.chatMin, 2);
+  assert.equal(a.totalMin, 4);
+  // a different day is independent
+  assert.equal(awayForDate(away, "2026-07-15").totalSec, 0);
+});
+
+test("addAway ignores idle/unknown kinds and non-positive seconds", async () => {
+  const { addAway, awayForDate } = await import("../detect.js");
+  let away = addAway({}, "2026-07-14", "idle", 100);
+  away = addAway(away, "2026-07-14", "chat", 0);
+  away = addAway(away, "2026-07-14", "chat", -5);
+  assert.equal(awayForDate(away, "2026-07-14").totalSec, 0);
+});
+
+test("normalizeAway drops bad keys and clamps values", async () => {
+  const { normalizeAway } = await import("../detect.js");
+  const out = normalizeAway({
+    "2026-07-14": { chatSec: 10.7, callSec: -3 },
+    "not-a-date": { chatSec: 999 },
+    "2026-07-15": "x",
+  });
+  assert.deepEqual(Object.keys(out), ["2026-07-14"]);
+  assert.deepEqual(out["2026-07-14"], { chatSec: 10, callSec: 0 });
+});
+
+test("appendLog keeps a capped ring buffer (oldest dropped)", async () => {
+  const { appendLog } = await import("../detect.js");
+  let logs = [];
+  for (let i = 0; i < 5; i++) logs = appendLog(logs, { ts: i, msg: String(i) }, 3);
+  assert.equal(logs.length, 3);
+  assert.deepEqual(logs.map((l) => l.msg), ["2", "3", "4"]);
+});
+
+test("formatLogsForExport renders a readable header + lines", async () => {
+  const { formatLogsForExport } = await import("../detect.js");
+  const text = formatLogsForExport(
+    [{ ts: 0, level: "info", msg: "presence: idle -> call", detail: { tabs: 1 } }],
+    { version: "1.10.0", away: { chatMin: 2, callMin: 5 } }
+  );
+  assert.match(text, /Ticket Telemetry — presence log export/);
+  assert.match(text, /version: 1\.10\.0/);
+  assert.match(text, /away today: chat 2m · call 5m/);
+  assert.match(text, /presence: idle -> call/);
+  assert.match(text, /\{"tabs":1\}/);
+});

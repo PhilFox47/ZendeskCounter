@@ -8,10 +8,15 @@ import {
   serializeState,
   parseImport,
   mergeStates,
+  awayForDate,
+  formatLogsForExport,
   DEFAULT_GOALS,
 } from "./detect.js";
 
 const STORAGE_KEY = "counterState";
+const AWAY_KEY = "awayTime";
+const PRESENCE_KEY = "presenceState";
+const LOGS_KEY = "ptLogs";
 
 function getState() {
   return new Promise((resolve) => {
@@ -118,18 +123,70 @@ function renderSlot(s) {
   }
 }
 
+function fmtDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+// Live presence indicator (auto-detected chat / call).
+async function renderPresence() {
+  const [pres, away] = await Promise.all([
+    new Promise((r) => chrome.storage.local.get(PRESENCE_KEY, (o) => r(o[PRESENCE_KEY]))),
+    new Promise((r) => chrome.storage.local.get(AWAY_KEY, (o) => r(o[AWAY_KEY]))),
+  ]);
+  const box = document.getElementById("presenceBox");
+  const title = document.getElementById("prTitle");
+  const sub = document.getElementById("prSub");
+  const a = awayForDate(away, localDateKey());
+  const awayLine = `Today: ${a.chatMin}m chat · ${a.callMin}m call`;
+
+  box.classList.remove("idle", "chat", "call", "stale");
+  if (!pres || pres.updatedAt == null) {
+    box.classList.add("stale");
+    title.textContent = "Presence: not detected";
+    sub.textContent = "Open a Zendesk agent tab to start detecting. " + awayLine;
+    return;
+  }
+  const staleMs = Date.now() - pres.updatedAt;
+  const state = staleMs > 90000 ? "stale" : pres.state || "idle";
+  if (state === "stale") {
+    box.classList.add("stale");
+    title.textContent = "Presence: idle (no active Zendesk tab)";
+    sub.textContent = awayLine;
+    return;
+  }
+  box.classList.add(state);
+  const sinceSec = Math.max(0, Math.round((Date.now() - (pres.since || Date.now())) / 1000));
+  if (state === "call") {
+    title.textContent = "On a call";
+    sub.textContent = `for ${fmtDuration(sinceSec)} · ${awayLine}`;
+  } else if (state === "chat") {
+    title.textContent = "In an active chat";
+    sub.textContent = `for ${fmtDuration(sinceSec)} · ${awayLine}`;
+  } else {
+    title.textContent = "Working tickets (no chat/call)";
+    sub.textContent = awayLine;
+  }
+}
+
 async function init() {
   let state = await getState();
   render(state);
+  renderPresence();
 
-  // Keep the "act now?" indicator live while the popup is open: tick the clock,
-  // and refresh everything if a submit lands via the background worker.
-  setInterval(() => renderSlot(state), 15000);
+  // Keep the "act now?" indicator and presence live while the popup is open.
+  setInterval(() => {
+    renderSlot(state);
+    renderPresence();
+  }, 5000);
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.counterState) {
-      state = normalize(changes.counterState.newValue);
+    if (area !== "local") return;
+    if (changes[STORAGE_KEY]) {
+      state = normalize(changes[STORAGE_KEY].newValue);
       render(state);
     }
+    if (changes[PRESENCE_KEY] || changes[AWAY_KEY]) renderPresence();
   });
 
   async function updateGoal(field, value) {
@@ -176,6 +233,36 @@ async function init() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  // --- Diagnostics: export / clear presence logs ----------------------------
+  function download(name, text, mime) {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  document.getElementById("exportLogs").addEventListener("click", async () => {
+    const [logs, away] = await Promise.all([
+      new Promise((r) => chrome.storage.local.get(LOGS_KEY, (o) => r(o[LOGS_KEY] || []))),
+      new Promise((r) => chrome.storage.local.get(AWAY_KEY, (o) => r(o[AWAY_KEY]))),
+    ]);
+    const text = formatLogsForExport(logs, {
+      version: chrome.runtime.getManifest().version,
+      away: awayForDate(away, localDateKey()),
+    });
+    download(`ticket-telemetry-logs-${localDateKey()}.txt`, text, "text/plain");
+  });
+
+  document.getElementById("clearLogs").addEventListener("click", async () => {
+    if (!confirm("Clear the presence detection logs?")) return;
+    await new Promise((r) => chrome.storage.local.set({ [LOGS_KEY]: [] }, r));
   });
 
   // --- Import (merge or replace) --------------------------------------------
