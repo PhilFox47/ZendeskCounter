@@ -176,7 +176,7 @@ it across versions or devices:
 - **Export** downloads a small `zendesk-productivity-YYYY-MM-DD.json` file
   containing every recorded day, your targets, and per-day chat/call time. It's a
   plain, versioned, self-describing JSON envelope
-  (`{ app, schema, exportedAt, data: { days, goals, away } }`) — no ticket
+  (`{ app, schema, appVersion, exportedAt, data: { days, goals, away } }`) — no ticket
   content, just the counts, 30-minute-block indices, goals, and chat/call seconds.
   (Chat/call time also merges on import, taking the higher per-day value.)
 - **Import · replace** overwrites all current data with the file's data

@@ -242,7 +242,8 @@ async function init() {
   document.getElementById("exportBtn").addEventListener("click", async () => {
     const s = await getState();
     const aw = await loadAway();
-    const json = JSON.stringify(serializeState(s, new Date(), aw), null, 2);
+    const version = chrome.runtime.getManifest().version;
+    const json = JSON.stringify(serializeState(s, new Date(), aw, version), null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

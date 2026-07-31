@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Ticket Telemetry",
-  "version": "1.12.2",
+  "version": "1.12.3",
   "description": "Tracks your Zendesk solved/hr and replies/hr per 30-minute block — shown on the toolbar icon and a full timeline dashboard.",
   "permissions": ["webRequest", "storage", "alarms"],
   "host_permissions": ["*://*.zendesk.com/*"],

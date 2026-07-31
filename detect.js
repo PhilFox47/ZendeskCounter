@@ -620,11 +620,12 @@ function sanitizeGoals(goals) {
  * @param {object} state
  * @returns {object}
  */
-export function serializeState(state, now = new Date(), away) {
+export function serializeState(state, now = new Date(), away, version) {
   const s = normalize(state);
   return {
     app: APP_ID,
     schema: SCHEMA_VERSION,
+    appVersion: version || null, // which extension build wrote this file
     exportedAt: now.toISOString(),
     data: { days: s.days, goals: s.goals, away: normalizeAway(away || {}) },
   };
