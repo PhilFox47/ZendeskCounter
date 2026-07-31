@@ -134,8 +134,11 @@ and reports a coarse status to the background worker, which times it.
 
 - **Active chat** — detected when a ticket tab shows a **green status bubble**
   (`[data-test-id="header-tab"]` with a green `avatars.status_indicator`).
-- **On a call** — detected from Zendesk Talk: the `talk-top-nav-control-*` state
-  and the in-ticket call-controls bar becoming active.
+- **On a call** — detected from the in-call control elements that only exist
+  during a live call (`talk-agent-status-call-timer`, `ticket-call-controls-hang-up`,
+  `ticket-call-controls-mute`, `call-control-buttons-container`). These are
+  language-independent; the `talk-top-nav-control-*` suffix is **not** used for
+  this because it reads `online` both when available and on a call.
 - Merged across tabs (**call > chat > idle**) and accumulated per day as chat/call
   seconds. A live **status indicator** in the popup shows the current state and
   today's chat/call minutes. The **dashboard** shows it too: a "Chat / call" card

@@ -59,24 +59,31 @@
       });
     }
 
-    // Phone: the Talk top-nav control's test-id suffix encodes state, and the
-    // in-ticket call controls bar gets populated during a live call.
+    // Phone: the in-call controls / call timer only exist in the DOM during a
+    // live call. These are language-independent and reliable — unlike the Talk
+    // top-nav suffix, which reads "online" both when available and on a call,
+    // and the action bar, which stays empty during a call.
+    const CALL_SELECTORS = [
+      '[data-test-id="talk-agent-status-call-timer"]',
+      '[data-test-id="call-control-buttons-container"]',
+      '[data-test-id="ticket-call-controls-hang-up"]',
+      '[data-test-id="ticket-call-controls-mute"]',
+    ];
+    const matchedCall = CALL_SELECTORS.filter((s) => document.querySelector(s));
+    const callActive = matchedCall.length > 0;
+
+    // Kept for diagnostics only (the suffix/aria are localized / ambiguous).
     const talkBtn = document.querySelector('[data-test-id^="talk-top-nav-control-"]');
     const talkSuffix = talkBtn
       ? (talkBtn.getAttribute("data-test-id") || "").replace("talk-top-nav-control-", "")
       : null;
-    const callBar = document.querySelector('[data-test-id="ticket-call-controls-action-bar"]');
-    const callBarActive = !!(callBar && callBar.childElementCount > 0);
-    // Idle-ish Talk states that are NOT a call. Anything else with a talk button
-    // present (e.g. on-call / connected / wrap-up) is treated as a call.
-    const TALK_IDLE = new Set(["offline", "available", "online", "away", "transfers-only", "transfersonly", ""]);
-    const talkOnCall = callBarActive || (talkSuffix != null && !TALK_IDLE.has(talkSuffix));
+    const talkAria = talkBtn ? talkBtn.getAttribute("aria-label") : null;
 
-    return { tabs, chatTabs, talkSuffix, callBarActive, talkOnCall };
+    return { tabs, chatTabs, talkSuffix, talkAria, callMatched: matchedCall, callActive };
   }
 
   function classify(sig) {
-    if (sig.talkOnCall) return "call";
+    if (sig.callActive) return "call";
     if (sig.chatTabs > 0) return "chat";
     return "idle";
   }
@@ -99,7 +106,7 @@
       return;
     }
 
-    const key = state + "|" + sig.chatTabs + "|" + sig.talkSuffix + "|" + sig.callBarActive;
+    const key = state + "|" + sig.chatTabs + "|" + sig.callActive + "|" + sig.talkSuffix;
     const now = Date.now();
     const changed = state !== lastState || key !== lastSignalsKey;
 
