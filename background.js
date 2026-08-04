@@ -95,14 +95,12 @@ async function updateAction(state) {
 
   const m = metricsForDate(s, localDateKey(), away);
   const deductedMin = Math.round(m.deductedSec / 60);
-  const prodLine =
-    `Zendesk today — ${formatRate(m.productiveHours)}h productive` +
-    (deductedMin > 0 ? ` (−${deductedMin}m chat/call)` : "");
+  const repliesNote = deductedMin > 0 ? ` −${deductedMin}m chat/call` : "";
   await chrome.action.setTitle({
     title:
-      `${prodLine}\n` +
+      `Zendesk today — ${formatRate(m.productiveHours)}h productive\n` +
       `Solved ${formatRate(m.solvedPerHour)}/h (${m.solved}) · ` +
-      `Replies ${formatRate(m.repliesPerHour)}/h (${m.replies})`,
+      `Replies ${formatRate(m.repliesPerHour)}/h (${m.replies}${repliesNote})`,
   });
 }
 

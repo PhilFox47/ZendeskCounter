@@ -170,11 +170,13 @@ function renderDay() {
   const repliesColor = progressColor(m.repliesPerHour, goals.repliesPerHour);
   const a = awayForDate(away, selectedDate);
   const dedMin = Math.round((m.deductedSec || 0) / 60);
-  const prodSub = `${m.productiveBlocks} active blocks` + (dedMin > 0 ? ` · −${dedMin}m chat/call` : "");
+  const repliesSub =
+    `${m.replies} replies · target ${goals.repliesPerHour}` +
+    (dedMin > 0 ? ` · −${dedMin}m chat/call` : "");
   document.getElementById("summary").innerHTML =
-    card("Productive time", `${fmtHours(m.productiveHours)}h`, prodSub) +
+    card("Productive time", `${fmtHours(m.productiveHours)}h`, `${m.productiveBlocks} active blocks`) +
     card("Solved / hr", formatRate(m.solvedPerHour), `${m.solved} solved · target ${goals.solvedPerHour}`, solvedColor) +
-    card("Replies / hr", formatRate(m.repliesPerHour), `${m.replies} replies · target ${goals.repliesPerHour}`, repliesColor) +
+    card("Replies / hr", formatRate(m.repliesPerHour), repliesSub, repliesColor) +
     card("Peak solve rate", peakRate(day, "solved"), "best 30-min block") +
     card("Chat / call", `${fmtAway(a.chatMin)} / ${fmtAway(a.callMin)}`, `${fmtAway(a.totalMin)} away from tickets`);
 
@@ -261,10 +263,14 @@ function renderWeek() {
   }
   const wkChatMin = Math.round(wkChat / 60);
   const wkCallMin = Math.round(wkCall / 60);
+  const wkDedMin = Math.round(Math.max(0, (week.productiveHours - week.replyProductiveHours)) * 60);
+  const wkRepliesSub =
+    `${week.replies} replies · target ${goals.repliesPerHour}` +
+    (wkDedMin > 0 ? ` · −${wkDedMin}m chat/call` : "");
   document.getElementById("weekSummary").innerHTML =
     card("Productive time", `${fmtHours(week.productiveHours)}h`, `${week.productiveBlocks} active blocks`) +
     card("Solved / hr", formatRate(week.solvedPerHour), `${week.solved} solved · target ${goals.solvedPerHour}`, solvedColor) +
-    card("Replies / hr", formatRate(week.repliesPerHour), `${week.replies} replies · target ${goals.repliesPerHour}`, repliesColor) +
+    card("Replies / hr", formatRate(week.repliesPerHour), wkRepliesSub, repliesColor) +
     card("Days worked", `${week.worked}/5`, "weekdays with activity") +
     card("Chat / call", `${fmtAway(wkChatMin)} / ${fmtAway(wkCallMin)}`, `${fmtAway(wkChatMin + wkCallMin)} away this week`);
 

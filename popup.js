@@ -73,12 +73,12 @@ function render(state) {
   document.getElementById("prodBlocks").textContent = today.productiveBlocks;
   document.getElementById("todayReplies").textContent = today.replies;
   document.getElementById("todaySolved").textContent = today.solved;
-  // Show the chat/call deduction under the productive-hours card when present.
+  // Chat/call is deducted from the replies denominator only (you can still solve
+  // during a chat/call), so the note lives on the replies rate, not on
+  // productive hours or the solved rate.
   const dedMin = Math.round((today.deductedSec || 0) / 60);
-  const prodLabel = document.getElementById("prodHoursLabel");
-  if (prodLabel) {
-    prodLabel.textContent = dedMin > 0 ? `Productive hours (−${dedMin}m)` : "Productive hours";
-  }
+  const repliesNote = document.getElementById("repliesAwayNote");
+  if (repliesNote) repliesNote.textContent = dedMin > 0 ? ` · −${dedMin}m chat/call` : "";
 
   document.getElementById("goalReplies").textContent = `target ${goals.repliesPerHour}`;
   document.getElementById("goalSolved").textContent = `target ${goals.solvedPerHour}`;

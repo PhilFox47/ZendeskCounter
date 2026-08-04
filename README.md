@@ -151,16 +151,21 @@ logs** saves them (with the raw signals — tab statuses, colors, Talk state) to
 text file you can share, and **Clear logs** resets it. This is how the green /
 on-call thresholds get calibrated if something is mis-detected.
 
-### Deducted from productive time
+### Deducted from productive time (replies only)
 
-Chat/call time is **deducted from productive time**, so your solved/hr and
-replies/hr are measured over ticket-available time. The deduction is **per
-block**: only chat/call seconds that fall *within a productive 30-minute block*
-are removed (a block's productive portion = 30 min − chat/call in that block,
-floored at 0). Time on a call during a block where you did *no* ticket work isn't
-subtracted — there was no productive time there to remove — so the rate can't be
-distorted by out-of-band calls. The deduction flows through everywhere: the
-toolbar icon rates, the popup ("Productive hours (−Nm)" and the By-day table), and
+Chat/call time is deducted from the **replies/hr** denominator, but **not** from
+**solved/hr**. The reason: during a live chat or call you can't send a public
+reply, but you *can* still solve tickets — so that time is unavailable for
+replies yet still counts as productive for solves.
+
+- **solved/hr** = solved ÷ full productive hours (raw).
+- **replies/hr** = replies ÷ (productive hours − chat/call time).
+
+The deduction is **per block**: only chat/call seconds that fall *within a
+productive 30-minute block* are removed (floored at 0), so time on a call during
+a block where you did no ticket work isn't subtracted — there was no productive
+time there to remove. It flows through everywhere: the toolbar icon rates, the
+popup (a "· −Nm chat/call" note on the replies rate, plus the By-day table), and
 the dashboard day/week summaries.
 
 > Detection note: the green-bubble / on-call thresholds are still heuristics that

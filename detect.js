@@ -256,20 +256,23 @@ export function applyActivity(state, delta, when = new Date()) {
 export function dayMetrics(day, awayDay) {
   const d = { ...emptyDay(), ...(day || {}) };
   const productiveBlocks = d.blocks.length;
-  const rawProductiveHours = productiveBlocks * 0.5;
+  const productiveHours = productiveBlocks * 0.5; // raw — the denominator for solved/hr
 
+  // Chat/call time reduces time available for PUBLIC REPLIES only — you can
+  // still solve tickets during a chat/call, but you can't send a public reply.
+  // So it's deducted from the replies denominator, not the solved one.
   let deductedSec = 0;
   for (const idx of d.blocks) deductedSec += awayBlockSec(awayDay, idx);
-  const productiveHours = Math.max(0, rawProductiveHours - deductedSec / 3600);
+  const replyProductiveHours = Math.max(0, productiveHours - deductedSec / 3600);
 
   return {
     replies: d.replies,
     solved: d.solved,
     productiveBlocks,
-    rawProductiveHours,
     deductedSec,
-    productiveHours,
-    repliesPerHour: productiveHours ? d.replies / productiveHours : 0,
+    productiveHours, // raw
+    replyProductiveHours, // raw − chat/call in productive blocks
+    repliesPerHour: replyProductiveHours ? d.replies / replyProductiveHours : 0,
     solvedPerHour: productiveHours ? d.solved / productiveHours : 0,
   };
 }
@@ -365,13 +368,15 @@ export function weekAggregate(state, mondayKey, away) {
   let replies = 0;
   let solved = 0;
   let productiveBlocks = 0;
-  let productiveHours = 0;
+  let productiveHours = 0; // raw (solved denominator)
+  let replyProductiveHours = 0; // raw − chat/call (replies denominator)
   let worked = 0;
   for (const d of days) {
     replies += d.metrics.replies;
     solved += d.metrics.solved;
     productiveBlocks += d.metrics.productiveBlocks;
-    productiveHours += d.metrics.productiveHours; // already away-adjusted per day
+    productiveHours += d.metrics.productiveHours;
+    replyProductiveHours += d.metrics.replyProductiveHours;
     if (d.metrics.productiveBlocks > 0) worked += 1;
   }
   return {
@@ -383,7 +388,8 @@ export function weekAggregate(state, mondayKey, away) {
     solved,
     productiveBlocks,
     productiveHours,
-    repliesPerHour: productiveHours ? replies / productiveHours : 0,
+    replyProductiveHours,
+    repliesPerHour: replyProductiveHours ? replies / replyProductiveHours : 0,
     solvedPerHour: productiveHours ? solved / productiveHours : 0,
   };
 }

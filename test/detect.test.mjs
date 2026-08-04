@@ -708,7 +708,7 @@ test("addAway records per-block seconds; awayBlockSec caps at 30 min", async () 
   assert.equal(awayBlockSec(day, 30), 1800); // but capped at the 30-min block
 });
 
-test("dayMetrics deducts chat/call time within productive blocks only", async () => {
+test("dayMetrics: chat/call deducts from replies denominator only, not solved", async () => {
   const { dayMetrics, normalizeAway } = await import("../detect.js");
   // Two productive blocks (22, 23) = 1.0h raw; 6 solved, 14 replies.
   const day = {
@@ -716,44 +716,48 @@ test("dayMetrics deducts chat/call time within productive blocks only", async ()
     blockStats: { 22: { replies: 7, solved: 3 }, 23: { replies: 7, solved: 3 } },
   };
   // 15 min call in block 22 (productive) + 20 min call in block 40 (NOT productive).
-  let away = {};
   const { addAway } = await import("../detect.js");
-  away = addAway(away, "2026-07-14", "call", 900, 22);
+  let away = addAway({}, "2026-07-14", "call", 900, 22);
   away = addAway(away, "2026-07-14", "call", 1200, 40);
   const awayDay = normalizeAway(away)["2026-07-14"];
 
   const raw = dayMetrics(day); // no away -> unchanged
   assert.equal(raw.productiveHours, 1);
   assert.equal(raw.solvedPerHour, 6);
+  assert.equal(raw.repliesPerHour, 14);
 
   const adj = dayMetrics(day, awayDay);
-  assert.equal(adj.rawProductiveHours, 1);
+  assert.equal(adj.productiveHours, 1); // RAW — unchanged (solved can happen on a call)
   assert.equal(adj.deductedSec, 900); // only the in-block-22 call; block 40 not productive
-  assert.equal(adj.productiveHours, 0.75); // 1h − 15min
-  assert.equal(adj.solvedPerHour, 8); // 6 / 0.75h
-  assert.equal(Math.round(adj.repliesPerHour * 100) / 100, 18.67); // 14 / 0.75h
+  assert.equal(adj.replyProductiveHours, 0.75); // 1h − 15min (replies only)
+  assert.equal(adj.solvedPerHour, 6); // 6 / 1h — NOT deducted
+  assert.equal(Math.round(adj.repliesPerHour * 100) / 100, 18.67); // 14 / 0.75h — deducted
 });
 
-test("metricsForDate applies away when provided", async () => {
+test("metricsForDate: away lowers replies/hr but not solved/hr", async () => {
   const { metricsForDate, addAway } = await import("../detect.js");
   let s = normalize(undefined);
   s = applyActivity(s, { replies: 3, solved: 3, activity: true }, new Date(2026, 6, 14, 11, 5)); // block 22, 0.5h
   const away = addAway({}, "2026-07-14", "call", 900, 22); // 15 min of the 30
   const m = metricsForDate(s, "2026-07-14", away);
-  assert.equal(m.productiveHours, 0.25); // 0.5h − 15min
-  assert.equal(m.solvedPerHour, 12); // 3 / 0.25h
-  // without away -> raw
-  assert.equal(metricsForDate(s, "2026-07-14").productiveHours, 0.5);
+  assert.equal(m.productiveHours, 0.5); // raw
+  assert.equal(m.replyProductiveHours, 0.25); // 0.5h − 15min
+  assert.equal(m.solvedPerHour, 6); // 3 / 0.5h — not deducted
+  assert.equal(m.repliesPerHour, 12); // 3 / 0.25h — deducted
+  // without away -> both over raw
+  assert.equal(metricsForDate(s, "2026-07-14").repliesPerHour, 6);
 });
 
-test("weekAggregate deducts away across weekdays", async () => {
+test("weekAggregate: away lowers weekly replies/hr but not solved/hr", async () => {
   const { weekAggregate, addAway } = await import("../detect.js");
   let s = normalize(undefined);
   s = applyActivity(s, { replies: 4, solved: 2, activity: true }, new Date(2026, 6, 14, 9, 0)); // Tue block 18, 0.5h
-  let away = addAway({}, "2026-07-14", "chat", 900, 18); // 15 min in that block
+  const away = addAway({}, "2026-07-14", "chat", 900, 18); // 15 min in that block
   const w = weekAggregate(s, "2026-07-13", away);
-  assert.equal(w.productiveHours, 0.25); // 0.5h − 15min
-  assert.equal(w.solvedPerHour, 8); // 2 / 0.25h
+  assert.equal(w.productiveHours, 0.5); // raw
+  assert.equal(w.replyProductiveHours, 0.25);
+  assert.equal(w.solvedPerHour, 4); // 2 / 0.5h — not deducted
+  assert.equal(w.repliesPerHour, 16); // 4 / 0.25h — deducted
 });
 
 // --- Away time in export / import --------------------------------------------
