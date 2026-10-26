@@ -117,15 +117,27 @@ test("independent new ticket, public reply only (not solved)", () => {
 
 // --- New ticket (REST create) — faithful to captured POST /api/v2/tickets.json
 
-test("new ticket create counts as a public reply (comment public by default)", () => {
+test("new ticket create counts an explicitly public reply", () => {
   const body = JSON.stringify({
     ticket: {
       subject: "Beschädigte Sendung",
-      comment: { html_body: "<p>Hello</p>" }, // no `public` field -> defaults public
+      comment: { html_body: "<p>Hello</p>", public: true },
       requester: { email: "shop@example.com", name: "" },
     },
   });
   assert.deepEqual(deltaFromTicketCreate(body), { replies: 1, solved: 0, activity: true });
+});
+
+test("new ticket with unspecified comment visibility does not count as a public reply", () => {
+  // A missing public flag can inherit ticket/account settings; it is not
+  // reliable evidence that the comment was actually public.
+  const body = JSON.stringify({ ticket: { comment: { html_body: "<p>note</p>" } } });
+  assert.deepEqual(deltaFromTicketCreate(body), { replies: 0, solved: 0, activity: true });
+});
+
+test("new ticket with null comment visibility is not treated as public", () => {
+  const body = JSON.stringify({ ticket: { comment: { body: "note", public: null } } });
+  assert.deepEqual(deltaFromTicketCreate(body), { replies: 0, solved: 0, activity: true });
 });
 
 test("new ticket with an internal-only comment -> activity, no reply", () => {
@@ -133,9 +145,14 @@ test("new ticket with an internal-only comment -> activity, no reply", () => {
   assert.deepEqual(deltaFromTicketCreate(body), { replies: 0, solved: 0, activity: true });
 });
 
-test("new ticket created-and-solved -> reply + solved", () => {
-  const body = JSON.stringify({ ticket: { comment: { html_body: "x" }, status: "solved" } });
+test("new ticket created-and-solved with a public comment -> reply + solved", () => {
+  const body = JSON.stringify({ ticket: { comment: { html_body: "x", public: true }, status: "solved" } });
   assert.deepEqual(deltaFromTicketCreate(body), { replies: 1, solved: 1, activity: true });
+});
+
+test("new ticket created-and-solved without visibility counts solve but not public reply", () => {
+  const body = JSON.stringify({ ticket: { comment: { html_body: "note" }, status: "solved" } });
+  assert.deepEqual(deltaFromTicketCreate(body), { replies: 0, solved: 1, activity: true });
 });
 
 test("ticket create with no comment -> activity only", () => {
@@ -152,7 +169,7 @@ test("ticket create: malformed / non-ticket body -> nothing", () => {
 });
 
 test("deltaFromRequest routes GraphQL vs REST create by URL", () => {
-  const create = JSON.stringify({ ticket: { comment: { html_body: "x" } } });
+  const create = JSON.stringify({ ticket: { comment: { html_body: "x", public: true } } });
   // GraphQL update endpoint -> uses the mutation parser
   assert.deepEqual(
     deltaFromRequest("https://x.zendesk.com/api/graphql", "POST", publicReplySolved),
