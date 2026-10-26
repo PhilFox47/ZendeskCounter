@@ -9,7 +9,7 @@
 //     variables.ticket.status === "SOLVED"         -> solved
 //     (either mutation)                             -> activity -> productive block
 //   POST /api/v2/tickets.json (new ticket via side conversation, REST create):
-//     ticket.comment present & public !== false     -> public reply (default public)
+//     ticket.comment.public === true                 -> public reply (explicit only)
 //     ticket.status === "solved"                    -> solved
 //     (any create)                                  -> activity -> productive block
 // We only count a submit that completes with an HTTP 2xx, so failed/cancelled
