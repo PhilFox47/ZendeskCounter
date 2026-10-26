@@ -73,8 +73,8 @@ export function deltaFromRequestBody(text) {
 /**
  * Counting delta for a REST "create ticket" body (POST /api/v2/tickets.json).
  * New tickets are created through the REST API, not the GraphQL mutation. The
- * initial comment defaults to public (it emails the requester), so it counts as
- * a public reply unless explicitly flagged internal (comment.public === false).
+ * public status can depend on the ticket's comment-visibility settings, so an
+ * omitted `comment.public` is ambiguous. Count only explicitly public comments.
  * @param {string} text
  * @returns {{replies: number, solved: number, activity: boolean}}
  */
@@ -89,7 +89,9 @@ export function deltaFromTicketCreate(text) {
   if (!t || typeof t !== "object") return { replies: 0, solved: 0, activity: false };
   const c = t.comment;
   const hasComment = c && typeof c === "object";
-  const replies = hasComment && c.public !== false ? 1 : 0;
+  // Missing visibility isn't proof of a public reply. Fail closed rather than
+  // counting a potentially private note toward the public-reply metric.
+  const replies = hasComment && c.public === true ? 1 : 0;
   const solved =
     typeof t.status === "string" && t.status.toLowerCase() === "solved" ? 1 : 0;
   return { replies, solved, activity: true };
