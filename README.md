@@ -34,11 +34,15 @@ started from a **side conversation** goes through the REST API
 | Submit as Solved | `ticket.status === "SOLVED"` | **+1 solved** |
 | Internal note only | `isPublic === false` | productive block only (no reply/solve) |
 | **New independent ticket** | `CreateIssueTicketMutation` (same shape) | **+1 public reply** and, if solved, **+1 solved** |
-| **New ticket via side conversation** | REST create, `comment.public !== false` | **+1 public reply** (its first comment is public by default) |
+| **New ticket via side conversation** | REST create, `comment.public === true` | **+1 public reply** only when explicitly marked public |
 
-A reply-and-solve in one submit counts as **both** +1 reply and +1 solved. A
-submit is only counted once its request returns HTTP 2xx, so cancelled or failed
-submits never inflate anything.
+A reply-and-solve in one submit counts as **both** +1 reply and +1 solved. For
+REST ticket creation, a missing `comment.public` flag is **not** treated as
+public: Zendesk can inherit the first comment's visibility from ticket/account
+settings. This prevents private notes from inflating the reply count, but means
+a genuinely public REST create without an explicit flag is not counted.
+A submit is only counted once its request returns HTTP 2xx, so cancelled or
+failed submits never inflate anything.
 
 ### Known limitation: automatic solves aren't counted
 
